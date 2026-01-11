@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
+import { useFormStorage } from '../../hooks/useFormStorage'
 
 const muscleGroups = [
   'Chest',
@@ -14,12 +15,18 @@ const muscleGroups = [
   'Full Body',
 ]
 
+const initialFormState = { name: '', muscleGroup: '' }
+
 export default function ExerciseForm({ onSuccess }) {
-  const [name, setName] = useState('')
-  const [muscleGroup, setMuscleGroup] = useState('')
+  const [formData, setFormData, clearFormStorage] = useFormStorage('exercise', initialFormState)
+  const { name, muscleGroup } = formData
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const { user } = useAuth()
+
+  const updateForm = (updates) => {
+    setFormData({ ...formData, ...updates })
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -35,8 +42,8 @@ export default function ExerciseForm({ onSuccess }) {
     if (error) {
       setError(error.message)
     } else {
-      setName('')
-      setMuscleGroup('')
+      clearFormStorage()
+      setFormData(initialFormState)
       onSuccess?.()
     }
     setLoading(false)
@@ -50,7 +57,7 @@ export default function ExerciseForm({ onSuccess }) {
           <input
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => updateForm({ name: e.target.value })}
             placeholder="Exercise name"
             required
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -59,7 +66,7 @@ export default function ExerciseForm({ onSuccess }) {
         <div className="w-48">
           <select
             value={muscleGroup}
-            onChange={(e) => setMuscleGroup(e.target.value)}
+            onChange={(e) => updateForm({ muscleGroup: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">Select muscle group</option>

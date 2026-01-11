@@ -1,19 +1,49 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
+import { useFormStorage } from '../../hooks/useFormStorage'
+
+const getInitialFormState = () => ({
+  date: new Date().toISOString().split('T')[0],
+  calories: '',
+  protein: '',
+  carbs: '',
+  fat: '',
+  notes: '',
+})
 
 export default function NutritionForm({ existingLog, onSuccess, onCancel }) {
-  const [date, setDate] = useState(
-    existingLog?.date || new Date().toISOString().split('T')[0]
+  // Only use local storage for new entries, not when editing
+  const [storedData, setStoredData, clearFormStorage] = useFormStorage(
+    'nutrition',
+    getInitialFormState()
   )
-  const [calories, setCalories] = useState(existingLog?.calories || '')
-  const [protein, setProtein] = useState(existingLog?.protein || '')
-  const [carbs, setCarbs] = useState(existingLog?.carbs || '')
-  const [fat, setFat] = useState(existingLog?.fat || '')
-  const [notes, setNotes] = useState(existingLog?.notes || '')
+
+  const initialData = existingLog
+    ? {
+        date: existingLog.date,
+        calories: existingLog.calories || '',
+        protein: existingLog.protein || '',
+        carbs: existingLog.carbs || '',
+        fat: existingLog.fat || '',
+        notes: existingLog.notes || '',
+      }
+    : storedData
+
+  const [formData, setFormData] = useState(initialData)
+  const { date, calories, protein, carbs, fat, notes } = formData
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const { user } = useAuth()
+
+  const updateForm = (updates) => {
+    const newData = { ...formData, ...updates }
+    setFormData(newData)
+    // Only persist to storage for new entries
+    if (!existingLog) {
+      setStoredData(newData)
+    }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -45,6 +75,7 @@ export default function NutritionForm({ existingLog, onSuccess, onCancel }) {
     if (result.error) {
       setError(result.error.message)
     } else {
+      clearFormStorage()
       onSuccess?.()
     }
     setLoading(false)
@@ -64,7 +95,7 @@ export default function NutritionForm({ existingLog, onSuccess, onCancel }) {
           <input
             type="date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={(e) => updateForm({ date: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
@@ -75,7 +106,7 @@ export default function NutritionForm({ existingLog, onSuccess, onCancel }) {
           <input
             type="number"
             value={calories}
-            onChange={(e) => setCalories(e.target.value)}
+            onChange={(e) => updateForm({ calories: e.target.value })}
             placeholder="kcal"
             min="0"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -88,7 +119,7 @@ export default function NutritionForm({ existingLog, onSuccess, onCancel }) {
           <input
             type="number"
             value={protein}
-            onChange={(e) => setProtein(e.target.value)}
+            onChange={(e) => updateForm({ protein: e.target.value })}
             placeholder="grams"
             min="0"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -101,7 +132,7 @@ export default function NutritionForm({ existingLog, onSuccess, onCancel }) {
           <input
             type="number"
             value={carbs}
-            onChange={(e) => setCarbs(e.target.value)}
+            onChange={(e) => updateForm({ carbs: e.target.value })}
             placeholder="grams"
             min="0"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -114,7 +145,7 @@ export default function NutritionForm({ existingLog, onSuccess, onCancel }) {
           <input
             type="number"
             value={fat}
-            onChange={(e) => setFat(e.target.value)}
+            onChange={(e) => updateForm({ fat: e.target.value })}
             placeholder="grams"
             min="0"
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -128,7 +159,7 @@ export default function NutritionForm({ existingLog, onSuccess, onCancel }) {
         </label>
         <textarea
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          onChange={(e) => updateForm({ notes: e.target.value })}
           rows={2}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
         />

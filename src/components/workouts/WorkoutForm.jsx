@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
+import { useFormStorage } from '../../hooks/useFormStorage'
 import WorkoutEntry from './WorkoutEntry'
 
 const createEmptyEntry = () => ({
@@ -11,25 +12,34 @@ const createEmptyEntry = () => ({
   weight: '',
 })
 
+const getInitialFormState = () => ({
+  date: new Date().toISOString().split('T')[0],
+  notes: '',
+  entries: [createEmptyEntry()],
+})
+
 export default function WorkoutForm({ onSuccess, onCancel }) {
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
-  const [notes, setNotes] = useState('')
-  const [entries, setEntries] = useState([createEmptyEntry()])
+  const [formData, setFormData, clearFormStorage] = useFormStorage('workout', getInitialFormState())
+  const { date, notes, entries } = formData
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const { user } = useAuth()
 
+  const updateForm = (updates) => {
+    setFormData({ ...formData, ...updates })
+  }
+
   const addEntry = () => {
-    setEntries([...entries, createEmptyEntry()])
+    updateForm({ entries: [...entries, createEmptyEntry()] })
   }
 
   const updateEntry = (id, updatedEntry) => {
-    setEntries(entries.map((e) => (e.id === id ? updatedEntry : e)))
+    updateForm({ entries: entries.map((e) => (e.id === id ? updatedEntry : e)) })
   }
 
   const removeEntry = (id) => {
     if (entries.length > 1) {
-      setEntries(entries.filter((e) => e.id !== id))
+      updateForm({ entries: entries.filter((e) => e.id !== id) })
     }
   }
 
@@ -77,6 +87,7 @@ export default function WorkoutForm({ onSuccess, onCancel }) {
     if (entriesError) {
       setError(entriesError.message)
     } else {
+      clearFormStorage()
       onSuccess?.()
     }
     setLoading(false)
@@ -93,7 +104,7 @@ export default function WorkoutForm({ onSuccess, onCancel }) {
         <input
           type="date"
           value={date}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={(e) => updateForm({ date: e.target.value })}
           className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
         />
       </div>
@@ -127,7 +138,7 @@ export default function WorkoutForm({ onSuccess, onCancel }) {
         </label>
         <textarea
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          onChange={(e) => updateForm({ notes: e.target.value })}
           rows={2}
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
         />
