@@ -1,4 +1,5 @@
-import { useAuth } from '../../hooks/useAuth'
+import { useAuth } from '@/hooks/useAuth'
+import { Button } from '@/components/ui/button'
 
 export default function Header() {
   const { user, signOut } = useAuth()
@@ -8,18 +9,15 @@ export default function Header() {
   }
 
   return (
-    <header className="bg-blue-600 text-white shadow-md">
+    <header className="border-b bg-background">
       <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
         <h1 className="text-xl font-bold">Fitness Tracker</h1>
         {user && (
           <div className="flex items-center gap-4">
-            <span className="text-sm">{user.email}</span>
-            <button
-              onClick={handleSignOut}
-              className="text-sm bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded"
-            >
+            <span className="text-sm text-muted-foreground">{user.email}</span>
+            <Button variant="outline" size="sm" onClick={handleSignOut}>
               Sign Out
-            </button>
+            </Button>
           </div>
         )}
       </div>

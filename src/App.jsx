@@ -1,11 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider, useAuth } from './hooks/useAuth'
-import ProtectedRoute from './components/auth/ProtectedRoute'
-import LoginPage from './pages/LoginPage'
-import DashboardPage from './pages/DashboardPage'
-import WorkoutsPage from './pages/WorkoutsPage'
-import ExercisesPage from './pages/ExercisesPage'
-import NutritionPage from './pages/NutritionPage'
+import { AuthProvider, useAuth } from '@/hooks/useAuth'
+import ProtectedRoute from '@/components/auth/ProtectedRoute'
+import LoginPage from '@/pages/LoginPage'
+import DashboardPage from '@/pages/DashboardPage'
+import WorkoutsPage from '@/pages/WorkoutsPage'
+import ExercisesPage from '@/pages/ExercisesPage'
+import NutritionPage from '@/pages/NutritionPage'
 
 function AppRoutes() {
   const { user, loading } = useAuth()
@@ -13,7 +13,7 @@ function AppRoutes() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
+        <div className="text-muted-foreground">Loading...</div>
       </div>
     )
   }

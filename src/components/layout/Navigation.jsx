@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { cn } from '@/lib/utils'
 
 const navItems = [
   { to: '/', label: 'Dashboard' },
@@ -9,7 +10,7 @@ const navItems = [
 
 export default function Navigation() {
   return (
-    <nav className="bg-gray-100 border-b">
+    <nav className="border-b bg-background">
       <div className="max-w-6xl mx-auto px-4">
         <ul className="flex gap-1">
           {navItems.map((item) => (
@@ -17,11 +18,12 @@ export default function Navigation() {
               <NavLink
                 to={item.to}
                 className={({ isActive }) =>
-                  `block px-4 py-3 text-sm font-medium transition-colors ${
+                  cn(
+                    "block px-4 py-3 text-sm font-medium transition-colors",
                     isActive
-                      ? 'text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`
+                      ? "text-foreground border-b-2 border-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  )
                 }
               >
                 {item.label}

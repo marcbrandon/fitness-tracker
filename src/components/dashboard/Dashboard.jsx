@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { supabase } from '@/lib/supabase'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -83,7 +84,7 @@ export default function Dashboard() {
   }
 
   if (loading) {
-    return <div className="text-gray-500">Loading dashboard...</div>
+    return <div className="text-muted-foreground">Loading dashboard...</div>
   }
 
   return (
@@ -91,105 +92,117 @@ export default function Dashboard() {
       <h2 className="text-2xl font-bold mb-6">Dashboard</h2>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-3xl font-bold text-blue-600">
-            {stats.workoutsThisWeek}
-          </div>
-          <div className="text-sm text-gray-600">Workouts this week</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-3xl font-bold text-green-600">
-            {stats.totalExercises}
-          </div>
-          <div className="text-sm text-gray-600">Exercises in library</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-3xl font-bold text-orange-600">
-            {stats.avgCalories}
-          </div>
-          <div className="text-sm text-gray-600">Avg calories/day</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="text-3xl font-bold text-purple-600">
-            {stats.avgProtein}g
-          </div>
-          <div className="text-sm text-gray-600">Avg protein/day</div>
-        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-3xl font-bold text-primary">
+              {stats.workoutsThisWeek}
+            </div>
+            <div className="text-sm text-muted-foreground">Workouts this week</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-3xl font-bold text-green-600">
+              {stats.totalExercises}
+            </div>
+            <div className="text-sm text-muted-foreground">Exercises in library</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-3xl font-bold text-orange-600">
+              {stats.avgCalories}
+            </div>
+            <div className="text-sm text-muted-foreground">Avg calories/day</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-3xl font-bold text-purple-600">
+              {stats.avgProtein}g
+            </div>
+            <div className="text-sm text-muted-foreground">Avg protein/day</div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold">Recent Workouts</h3>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-lg">Recent Workouts</CardTitle>
             <Link
               to="/workouts"
-              className="text-blue-600 hover:text-blue-800 text-sm"
+              className="text-sm text-primary hover:underline"
             >
               View all
             </Link>
-          </div>
-          {recentWorkouts.length === 0 ? (
-            <p className="text-gray-500 text-sm">No workouts yet</p>
-          ) : (
-            <ul className="divide-y divide-gray-100">
-              {recentWorkouts.map((workout) => (
-                <li key={workout.id} className="py-2">
-                  <div className="font-medium">{formatDate(workout.date)}</div>
-                  <div className="text-sm text-gray-600">
-                    {workout.workout_entries?.[0]?.count || 0} exercises
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+          </CardHeader>
+          <CardContent>
+            {recentWorkouts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No workouts yet</p>
+            ) : (
+              <ul className="divide-y">
+                {recentWorkouts.map((workout) => (
+                  <li key={workout.id} className="py-2">
+                    <div className="font-medium">{formatDate(workout.date)}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {workout.workout_entries?.[0]?.count || 0} exercises
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
 
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold">Today's Nutrition</h3>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-lg">Today's Nutrition</CardTitle>
             <Link
               to="/nutrition"
-              className="text-blue-600 hover:text-blue-800 text-sm"
+              className="text-sm text-primary hover:underline"
             >
               {todayNutrition ? 'Edit' : 'Log'}
             </Link>
-          </div>
-          {todayNutrition ? (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-2xl font-bold">
-                  {todayNutrition.calories || 0}
+          </CardHeader>
+          <CardContent>
+            {todayNutrition ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-2xl font-bold">
+                    {todayNutrition.calories || 0}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Calories</div>
                 </div>
-                <div className="text-sm text-gray-600">Calories</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold">
-                  {todayNutrition.protein || 0}g
+                <div>
+                  <div className="text-2xl font-bold">
+                    {todayNutrition.protein || 0}g
+                  </div>
+                  <div className="text-sm text-muted-foreground">Protein</div>
                 </div>
-                <div className="text-sm text-gray-600">Protein</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold">
-                  {todayNutrition.carbs || 0}g
+                <div>
+                  <div className="text-2xl font-bold">
+                    {todayNutrition.carbs || 0}g
+                  </div>
+                  <div className="text-sm text-muted-foreground">Carbs</div>
                 </div>
-                <div className="text-sm text-gray-600">Carbs</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold">
-                  {todayNutrition.fat || 0}g
+                <div>
+                  <div className="text-2xl font-bold">
+                    {todayNutrition.fat || 0}g
+                  </div>
+                  <div className="text-sm text-muted-foreground">Fat</div>
                 </div>
-                <div className="text-sm text-gray-600">Fat</div>
               </div>
-            </div>
-          ) : (
-            <p className="text-gray-500 text-sm">
-              No nutrition logged for today.{' '}
-              <Link to="/nutrition" className="text-blue-600 hover:underline">
-                Log now
-              </Link>
-            </p>
-          )}
-        </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No nutrition logged for today.{' '}
+                <Link to="/nutrition" className="text-primary hover:underline">
+                  Log now
+                </Link>
+              </p>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

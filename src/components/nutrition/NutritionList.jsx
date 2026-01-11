@@ -1,5 +1,15 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase } from '@/lib/supabase'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import NutritionForm from './NutritionForm'
 
 export default function NutritionList() {
@@ -42,22 +52,21 @@ export default function NutritionList() {
   }
 
   if (loading) {
-    return <div className="text-gray-500">Loading nutrition logs...</div>
+    return <div className="text-muted-foreground">Loading nutrition logs...</div>
   }
 
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Nutrition</h2>
-        <button
+        <Button
           onClick={() => {
             setShowForm(!showForm)
             setEditingLog(null)
           }}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
         >
           {showForm ? 'Cancel' : 'Log Nutrition'}
-        </button>
+        </Button>
       </div>
 
       {(showForm || editingLog) && (
@@ -76,70 +85,61 @@ export default function NutritionList() {
       )}
 
       {logs.length === 0 ? (
-        <p className="text-gray-500">No nutrition logs yet. Start tracking!</p>
+        <p className="text-muted-foreground">No nutrition logs yet. Start tracking!</p>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                  Date
-                </th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">
-                  Calories
-                </th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">
-                  Protein
-                </th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">
-                  Carbs
-                </th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">
-                  Fat
-                </th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead className="text-right">Calories</TableHead>
+                <TableHead className="text-right">Protein</TableHead>
+                <TableHead className="text-right">Carbs</TableHead>
+                <TableHead className="text-right">Fat</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {logs.map((log) => (
-                <tr key={log.id}>
-                  <td className="px-4 py-3">{formatDate(log.date)}</td>
-                  <td className="px-4 py-3 text-right">
+                <TableRow key={log.id}>
+                  <TableCell className="font-medium">{formatDate(log.date)}</TableCell>
+                  <TableCell className="text-right">
                     {log.calories ? `${log.calories} kcal` : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-right">
+                  </TableCell>
+                  <TableCell className="text-right">
                     {log.protein ? `${log.protein}g` : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-right">
+                  </TableCell>
+                  <TableCell className="text-right">
                     {log.carbs ? `${log.carbs}g` : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-right">
+                  </TableCell>
+                  <TableCell className="text-right">
                     {log.fat ? `${log.fat}g` : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-right space-x-2">
-                    <button
+                  </TableCell>
+                  <TableCell className="text-right space-x-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => {
                         setEditingLog(log)
                         setShowForm(false)
                       }}
-                      className="text-blue-600 hover:text-blue-800 text-sm"
                     >
                       Edit
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleDelete(log.id)}
-                      className="text-red-600 hover:text-red-800 text-sm"
+                      className="text-destructive hover:text-destructive"
                     >
                       Delete
-                    </button>
-                  </td>
-                </tr>
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   )

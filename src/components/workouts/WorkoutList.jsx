@@ -1,5 +1,15 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase } from '@/lib/supabase'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import WorkoutForm from './WorkoutForm'
 
 export default function WorkoutList() {
@@ -48,19 +58,16 @@ export default function WorkoutList() {
   }
 
   if (loading) {
-    return <div className="text-gray-500">Loading workouts...</div>
+    return <div className="text-muted-foreground">Loading workouts...</div>
   }
 
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Workouts</h2>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
+        <Button onClick={() => setShowForm(!showForm)}>
           {showForm ? 'Cancel' : 'Log Workout'}
-        </button>
+        </Button>
       </div>
 
       {showForm && (
@@ -74,81 +81,85 @@ export default function WorkoutList() {
       )}
 
       {workouts.length === 0 ? (
-        <p className="text-gray-500">No workouts yet. Log your first workout!</p>
+        <p className="text-muted-foreground">No workouts yet. Log your first workout!</p>
       ) : (
         <div className="space-y-4">
           {workouts.map((workout) => (
-            <div key={workout.id} className="bg-white rounded-lg shadow">
-              <div
-                className="p-4 flex justify-between items-center cursor-pointer"
+            <Card key={workout.id}>
+              <CardHeader
+                className="cursor-pointer py-4"
                 onClick={() =>
                   setExpandedWorkout(
                     expandedWorkout === workout.id ? null : workout.id
                   )
                 }
               >
-                <div>
-                  <div className="font-semibold">{formatDate(workout.date)}</div>
-                  <div className="text-sm text-gray-600">
-                    {workout.workout_entries?.length || 0} exercises
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="font-semibold">{formatDate(workout.date)}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {workout.workout_entries?.length || 0} exercises
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDelete(workout.id)
+                      }}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      Delete
+                    </Button>
+                    <span className="text-muted-foreground">
+                      {expandedWorkout === workout.id ? '▼' : '▶'}
+                    </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDelete(workout.id)
-                    }}
-                    className="text-red-600 hover:text-red-800 text-sm"
-                  >
-                    Delete
-                  </button>
-                  <span className="text-gray-400">
-                    {expandedWorkout === workout.id ? '▼' : '▶'}
-                  </span>
-                </div>
-              </div>
+              </CardHeader>
 
               {expandedWorkout === workout.id && (
-                <div className="border-t px-4 py-3">
+                <CardContent className="pt-0">
                   {workout.workout_entries?.length > 0 ? (
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-gray-600">
-                          <th className="pb-2">Exercise</th>
-                          <th className="pb-2">Sets</th>
-                          <th className="pb-2">Reps</th>
-                          <th className="pb-2">Weight</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Exercise</TableHead>
+                          <TableHead>Sets</TableHead>
+                          <TableHead>Reps</TableHead>
+                          <TableHead>Weight</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {workout.workout_entries
                           .sort((a, b) => a.order_index - b.order_index)
                           .map((entry) => (
-                            <tr key={entry.id}>
-                              <td className="py-1">
+                            <TableRow key={entry.id}>
+                              <TableCell>
                                 {entry.exercises?.name || 'Unknown'}
-                              </td>
-                              <td className="py-1">{entry.sets || '-'}</td>
-                              <td className="py-1">{entry.reps || '-'}</td>
-                              <td className="py-1">
+                              </TableCell>
+                              <TableCell>{entry.sets || '-'}</TableCell>
+                              <TableCell>{entry.reps || '-'}</TableCell>
+                              <TableCell>
                                 {entry.weight ? `${entry.weight} lbs` : '-'}
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   ) : (
-                    <p className="text-gray-500 text-sm">No exercises recorded</p>
+                    <p className="text-sm text-muted-foreground">No exercises recorded</p>
                   )}
                   {workout.notes && (
-                    <p className="mt-2 text-sm text-gray-600">
+                    <p className="mt-3 text-sm text-muted-foreground">
                       <strong>Notes:</strong> {workout.notes}
                     </p>
                   )}
-                </div>
+                </CardContent>
               )}
-            </div>
+            </Card>
           ))}
         </div>
       )}

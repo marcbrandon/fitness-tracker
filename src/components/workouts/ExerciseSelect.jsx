@@ -1,5 +1,12 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase } from '@/lib/supabase'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 export default function ExerciseSelect({ value, onChange }) {
   const [exercises, setExercises] = useState([])
@@ -13,18 +20,17 @@ export default function ExerciseSelect({ value, onChange }) {
   }, [])
 
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-      required
-    >
-      <option value="">Select exercise</option>
-      {exercises.map((exercise) => (
-        <option key={exercise.id} value={exercise.id}>
-          {exercise.name} {exercise.muscle_group && `(${exercise.muscle_group})`}
-        </option>
-      ))}
-    </select>
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger>
+        <SelectValue placeholder="Select exercise" />
+      </SelectTrigger>
+      <SelectContent>
+        {exercises.map((exercise) => (
+          <SelectItem key={exercise.id} value={exercise.id}>
+            {exercise.name} {exercise.muscle_group && `(${exercise.muscle_group})`}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }

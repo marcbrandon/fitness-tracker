@@ -1,5 +1,15 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase } from '@/lib/supabase'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import ExerciseForm from './ExerciseForm'
 
 export default function ExerciseList() {
@@ -32,7 +42,7 @@ export default function ExerciseList() {
   }
 
   if (loading) {
-    return <div className="text-gray-500">Loading exercises...</div>
+    return <div className="text-muted-foreground">Loading exercises...</div>
   }
 
   return (
@@ -41,43 +51,39 @@ export default function ExerciseList() {
       <ExerciseForm onSuccess={fetchExercises} />
 
       {exercises.length === 0 ? (
-        <p className="text-gray-500">No exercises yet. Add one above!</p>
+        <p className="text-muted-foreground">No exercises yet. Add one above!</p>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                  Exercise
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">
-                  Muscle Group
-                </th>
-                <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Exercise</TableHead>
+                <TableHead>Muscle Group</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {exercises.map((exercise) => (
-                <tr key={exercise.id}>
-                  <td className="px-4 py-3">{exercise.name}</td>
-                  <td className="px-4 py-3 text-gray-600">
+                <TableRow key={exercise.id}>
+                  <TableCell className="font-medium">{exercise.name}</TableCell>
+                  <TableCell className="text-muted-foreground">
                     {exercise.muscle_group || '-'}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleDelete(exercise.id)}
-                      className="text-red-600 hover:text-red-800 text-sm"
+                      className="text-destructive hover:text-destructive"
                     >
                       Delete
-                    </button>
-                  </td>
-                </tr>
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   )
