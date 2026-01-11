@@ -27,15 +27,25 @@ const muscleGroups = [
 
 const initialFormState = { name: '', muscleGroup: '' }
 
-export default function ExerciseForm({ onSuccess }) {
-  const [formData, setFormData, clearFormStorage] = useFormStorage('exercise', initialFormState)
+export default function ExerciseForm({ existingExercise, onSuccess, onCancel }) {
+  const [storedData, setStoredData, clearFormStorage] = useFormStorage('exercise', initialFormState)
+
+  const initialData = existingExercise
+    ? { name: existingExercise.name, muscleGroup: existingExercise.muscle_group || '' }
+    : storedData
+
+  const [formData, setFormData] = useState(initialData)
   const { name, muscleGroup } = formData
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const { user } = useAuth()
 
   const updateForm = (updates) => {
-    setFormData({ ...formData, ...updates })
+    const newData = { ...formData, ...updates }
+    setFormData(newData)
+    if (!existingExercise) {
+      setStoredData(newData)
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -43,14 +53,26 @@ export default function ExerciseForm({ onSuccess }) {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.from('exercises').insert({
+    const data = {
       name,
       muscle_group: muscleGroup || null,
-      user_id: user.id,
-    })
+    }
 
-    if (error) {
-      setError(error.message)
+    let result
+    if (existingExercise) {
+      result = await supabase
+        .from('exercises')
+        .update(data)
+        .eq('id', existingExercise.id)
+    } else {
+      result = await supabase.from('exercises').insert({
+        ...data,
+        user_id: user.id,
+      })
+    }
+
+    if (result.error) {
+      setError(result.error.message)
     } else {
       clearFormStorage()
       setFormData(initialFormState)
@@ -62,7 +84,7 @@ export default function ExerciseForm({ onSuccess }) {
   return (
     <Card className="mb-6">
       <CardHeader>
-        <CardTitle>Add Exercise</CardTitle>
+        <CardTitle>{existingExercise ? 'Edit Exercise' : 'Add Exercise'}</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="flex flex-wrap gap-4">
@@ -93,8 +115,13 @@ export default function ExerciseForm({ onSuccess }) {
             </Select>
           </div>
           <Button type="submit" disabled={loading}>
-            {loading ? 'Adding...' : 'Add'}
+            {loading ? 'Saving...' : existingExercise ? 'Save' : 'Add'}
           </Button>
+          {onCancel && (
+            <Button type="button" variant="ghost" onClick={onCancel}>
+              Cancel
+            </Button>
+          )}
         </form>
         {error && <p className="text-sm text-destructive mt-2">{error}</p>}
       </CardContent>

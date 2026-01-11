@@ -16,6 +16,7 @@ export default function WorkoutList() {
   const [workouts, setWorkouts] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [editingWorkout, setEditingWorkout] = useState(null)
   const [expandedWorkout, setExpandedWorkout] = useState(null)
 
   const fetchWorkouts = async () => {
@@ -65,18 +66,28 @@ export default function WorkoutList() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Workouts</h2>
-        <Button onClick={() => setShowForm(!showForm)}>
+        <Button
+          onClick={() => {
+            setShowForm(!showForm)
+            setEditingWorkout(null)
+          }}
+        >
           {showForm ? 'Cancel' : 'Log Workout'}
         </Button>
       </div>
 
-      {showForm && (
+      {(showForm || editingWorkout) && (
         <WorkoutForm
+          existingWorkout={editingWorkout}
           onSuccess={() => {
             setShowForm(false)
+            setEditingWorkout(null)
             fetchWorkouts()
           }}
-          onCancel={() => setShowForm(false)}
+          onCancel={() => {
+            setShowForm(false)
+            setEditingWorkout(null)
+          }}
         />
       )}
 
@@ -102,6 +113,17 @@ export default function WorkoutList() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setEditingWorkout(workout)
+                        setShowForm(false)
+                      }}
+                    >
+                      Edit
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"

@@ -23,15 +23,39 @@ const getInitialFormState = () => ({
   entries: [createEmptyEntry()],
 })
 
-export default function WorkoutForm({ onSuccess, onCancel }) {
-  const [formData, setFormData, clearFormStorage] = useFormStorage('workout', getInitialFormState())
+export default function WorkoutForm({ existingWorkout, onSuccess, onCancel }) {
+  const [storedData, setStoredData, clearFormStorage] = useFormStorage('workout', getInitialFormState())
+
+  const initialData = existingWorkout
+    ? {
+        date: existingWorkout.date,
+        notes: existingWorkout.notes || '',
+        entries: existingWorkout.workout_entries?.length > 0
+          ? existingWorkout.workout_entries
+              .sort((a, b) => a.order_index - b.order_index)
+              .map((entry) => ({
+                id: entry.id,
+                exercise_id: entry.exercise_id,
+                sets: entry.sets?.toString() || '',
+                reps: entry.reps?.toString() || '',
+                weight: entry.weight?.toString() || '',
+              }))
+          : [createEmptyEntry()],
+      }
+    : storedData
+
+  const [formData, setFormData] = useState(initialData)
   const { date, notes, entries } = formData
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const { user } = useAuth()
 
   const updateForm = (updates) => {
-    setFormData({ ...formData, ...updates })
+    const newData = { ...formData, ...updates }
+    setFormData(newData)
+    if (!existingWorkout) {
+      setStoredData(newData)
+    }
   }
 
   const addEntry = () => {
@@ -60,24 +84,61 @@ export default function WorkoutForm({ onSuccess, onCancel }) {
       return
     }
 
-    const { data: workout, error: workoutError } = await supabase
-      .from('workouts')
-      .insert({
-        user_id: user.id,
-        date,
-        notes: notes || null,
-      })
-      .select()
-      .single()
+    let workoutId
 
-    if (workoutError) {
-      setError(workoutError.message)
-      setLoading(false)
-      return
+    if (existingWorkout) {
+      // Update existing workout
+      const { error: updateError } = await supabase
+        .from('workouts')
+        .update({
+          date,
+          notes: notes || null,
+        })
+        .eq('id', existingWorkout.id)
+
+      if (updateError) {
+        setError(updateError.message)
+        setLoading(false)
+        return
+      }
+
+      workoutId = existingWorkout.id
+
+      // Delete existing entries and insert new ones
+      const { error: deleteError } = await supabase
+        .from('workout_entries')
+        .delete()
+        .eq('workout_id', workoutId)
+
+      if (deleteError) {
+        setError(deleteError.message)
+        setLoading(false)
+        return
+      }
+    } else {
+      // Create new workout
+      const { data: workout, error: workoutError } = await supabase
+        .from('workouts')
+        .insert({
+          user_id: user.id,
+          date,
+          notes: notes || null,
+        })
+        .select()
+        .single()
+
+      if (workoutError) {
+        setError(workoutError.message)
+        setLoading(false)
+        return
+      }
+
+      workoutId = workout.id
     }
 
+    // Insert entries
     const workoutEntries = validEntries.map((entry, index) => ({
-      workout_id: workout.id,
+      workout_id: workoutId,
       exercise_id: entry.exercise_id,
       sets: entry.sets ? parseInt(entry.sets) : null,
       reps: entry.reps ? parseInt(entry.reps) : null,
@@ -101,7 +162,7 @@ export default function WorkoutForm({ onSuccess, onCancel }) {
   return (
     <Card className="mb-6">
       <CardHeader>
-        <CardTitle>Log Workout</CardTitle>
+        <CardTitle>{existingWorkout ? 'Edit Workout' : 'Log Workout'}</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -145,7 +206,7 @@ export default function WorkoutForm({ onSuccess, onCancel }) {
 
           <div className="flex gap-3">
             <Button type="submit" disabled={loading}>
-              {loading ? 'Saving...' : 'Save Workout'}
+              {loading ? 'Saving...' : existingWorkout ? 'Save Changes' : 'Save Workout'}
             </Button>
             {onCancel && (
               <Button type="button" variant="ghost" onClick={onCancel}>

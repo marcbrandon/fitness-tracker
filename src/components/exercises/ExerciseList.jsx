@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -15,6 +15,8 @@ import ExerciseForm from './ExerciseForm'
 export default function ExerciseList() {
   const [exercises, setExercises] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editingExercise, setEditingExercise] = useState(null)
 
   const fetchExercises = async () => {
     const { data, error } = await supabase
@@ -47,8 +49,32 @@ export default function ExerciseList() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Exercise Library</h2>
-      <ExerciseForm onSuccess={fetchExercises} />
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold">Exercise Library</h2>
+        <Button
+          onClick={() => {
+            setShowForm(!showForm)
+            setEditingExercise(null)
+          }}
+        >
+          {showForm ? 'Cancel' : 'Add Exercise'}
+        </Button>
+      </div>
+
+      {(showForm || editingExercise) && (
+        <ExerciseForm
+          existingExercise={editingExercise}
+          onSuccess={() => {
+            setShowForm(false)
+            setEditingExercise(null)
+            fetchExercises()
+          }}
+          onCancel={() => {
+            setShowForm(false)
+            setEditingExercise(null)
+          }}
+        />
+      )}
 
       {exercises.length === 0 ? (
         <p className="text-muted-foreground">No exercises yet. Add one above!</p>
@@ -69,7 +95,17 @@ export default function ExerciseList() {
                   <TableCell className="text-muted-foreground">
                     {exercise.muscle_group || '-'}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right space-x-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEditingExercise(exercise)
+                        setShowForm(false)
+                      }}
+                    >
+                      Edit
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
