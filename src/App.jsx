@@ -6,6 +6,7 @@ import DashboardPage from '@/pages/DashboardPage'
 import WorkoutsPage from '@/pages/WorkoutsPage'
 import ExercisesPage from '@/pages/ExercisesPage'
 import NutritionPage from '@/pages/NutritionPage'
+import ImportPage from '@/pages/ImportPage'
 
 function AppRoutes() {
   const { user, loading } = useAuth()
@@ -53,6 +54,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <NutritionPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/import"
+        element={
+          <ProtectedRoute>
+            <ImportPage />
           </ProtectedRoute>
         }
       />

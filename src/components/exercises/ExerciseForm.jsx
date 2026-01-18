@@ -4,14 +4,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { useFormStorage } from '@/hooks/useFormStorage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 
 const muscleGroups = [
   'Chest',
@@ -25,17 +19,17 @@ const muscleGroups = [
   'Full Body',
 ]
 
-const initialFormState = { name: '', muscleGroup: '' }
+const initialFormState = { name: '', muscleGroups: [] }
 
 export default function ExerciseForm({ existingExercise, onSuccess, onCancel }) {
   const [storedData, setStoredData, clearFormStorage] = useFormStorage('exercise', initialFormState)
 
   const initialData = existingExercise
-    ? { name: existingExercise.name, muscleGroup: existingExercise.muscle_group || '' }
+    ? { name: existingExercise.name, muscleGroups: existingExercise.muscle_group || [] }
     : storedData
 
   const [formData, setFormData] = useState(initialData)
-  const { name, muscleGroup } = formData
+  const { name, muscleGroups: selectedGroups } = formData
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const { user } = useAuth()
@@ -48,6 +42,14 @@ export default function ExerciseForm({ existingExercise, onSuccess, onCancel }) 
     }
   }
 
+  const toggleMuscleGroup = (group) => {
+    const current = selectedGroups || []
+    const updated = current.includes(group)
+      ? current.filter((g) => g !== group)
+      : [...current, group]
+    updateForm({ muscleGroups: updated })
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -55,7 +57,7 @@ export default function ExerciseForm({ existingExercise, onSuccess, onCancel }) 
 
     const data = {
       name,
-      muscle_group: muscleGroup || null,
+      muscle_group: selectedGroups?.length > 0 ? selectedGroups : null,
     }
 
     let result
@@ -87,8 +89,8 @@ export default function ExerciseForm({ existingExercise, onSuccess, onCancel }) 
         <CardTitle>{existingExercise ? 'Edit Exercise' : 'Add Exercise'}</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="flex flex-wrap gap-4">
-          <div className="flex-1 min-w-48">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
             <Input
               type="text"
               value={name}
@@ -97,31 +99,35 @@ export default function ExerciseForm({ existingExercise, onSuccess, onCancel }) 
               required
             />
           </div>
-          <div className="w-48">
-            <Select
-              value={muscleGroup}
-              onValueChange={(value) => updateForm({ muscleGroup: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Muscle group" />
-              </SelectTrigger>
-              <SelectContent>
-                {muscleGroups.map((group) => (
-                  <SelectItem key={group} value={group}>
-                    {group}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div>
+            <Label className="mb-2 block">Muscle Groups</Label>
+            <div className="flex flex-wrap gap-2">
+              {muscleGroups.map((group) => (
+                <button
+                  key={group}
+                  type="button"
+                  onClick={() => toggleMuscleGroup(group)}
+                  className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+                    selectedGroups?.includes(group)
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background text-muted-foreground border-border hover:border-primary'
+                  }`}
+                >
+                  {group}
+                </button>
+              ))}
+            </div>
           </div>
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Saving...' : existingExercise ? 'Save' : 'Add'}
-          </Button>
-          {onCancel && (
-            <Button type="button" variant="ghost" onClick={onCancel}>
-              Cancel
+          <div className="flex gap-3">
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Saving...' : existingExercise ? 'Save' : 'Add'}
             </Button>
-          )}
+            {onCancel && (
+              <Button type="button" variant="ghost" onClick={onCancel}>
+                Cancel
+              </Button>
+            )}
+          </div>
         </form>
         {error && <p className="text-sm text-destructive mt-2">{error}</p>}
       </CardContent>

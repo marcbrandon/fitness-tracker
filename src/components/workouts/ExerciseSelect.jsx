@@ -27,7 +27,7 @@ export default function ExerciseSelect({ value, onChange }) {
       <SelectContent>
         {exercises.map((exercise) => (
           <SelectItem key={exercise.id} value={exercise.id}>
-            {exercise.name} {exercise.muscle_group && `(${exercise.muscle_group})`}
+            {exercise.name} {exercise.muscle_group?.length > 0 && `(${exercise.muscle_group.join(', ')})`}
           </SelectItem>
         ))}
       </SelectContent>

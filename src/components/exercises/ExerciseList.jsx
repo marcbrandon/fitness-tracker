@@ -93,7 +93,9 @@ export default function ExerciseList() {
                 <TableRow key={exercise.id}>
                   <TableCell className="font-medium">{exercise.name}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {exercise.muscle_group || '-'}
+                    {exercise.muscle_group?.length > 0
+                      ? exercise.muscle_group.join(', ')
+                      : '-'}
                   </TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button
