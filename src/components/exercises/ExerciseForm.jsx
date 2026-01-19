@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { useFormStorage } from '@/hooks/useFormStorage'
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
-const muscleGroups = [
+const defaultMuscleGroups = [
   'Chest',
   'Back',
   'Shoulders',
@@ -32,7 +32,31 @@ export default function ExerciseForm({ existingExercise, onSuccess, onCancel }) 
   const { name, muscleGroups: selectedGroups } = formData
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [availableMuscleGroups, setAvailableMuscleGroups] = useState(defaultMuscleGroups)
   const { user } = useAuth()
+
+  useEffect(() => {
+    const fetchMuscleGroups = async () => {
+      const { data } = await supabase
+        .from('exercises')
+        .select('muscle_group')
+        .eq('user_id', user.id)
+
+      if (data) {
+        const dbGroups = data
+          .flatMap((e) => e.muscle_group || [])
+          .filter(Boolean)
+
+        const allGroups = [...new Set([...defaultMuscleGroups, ...dbGroups])]
+        allGroups.sort((a, b) => a.localeCompare(b))
+        setAvailableMuscleGroups(allGroups)
+      }
+    }
+
+    if (user) {
+      fetchMuscleGroups()
+    }
+  }, [user])
 
   const updateForm = (updates) => {
     const newData = { ...formData, ...updates }
@@ -102,7 +126,7 @@ export default function ExerciseForm({ existingExercise, onSuccess, onCancel }) 
           <div>
             <Label className="mb-2 block">Muscle Groups</Label>
             <div className="flex flex-wrap gap-2">
-              {muscleGroups.map((group) => (
+              {availableMuscleGroups.map((group) => (
                 <button
                   key={group}
                   type="button"
