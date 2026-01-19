@@ -2,7 +2,7 @@
 
 A personal fitness tracking app for logging workouts, exercises, and nutrition.
 
-**Live**: https://fitness-tracker-taupe-seven.vercel.app
+**Live**: https://mbh-fitness-tracker.vercel.app
 
 ## Features
 
