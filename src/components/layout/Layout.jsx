@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import Header from './Header'
 import Navigation from './Navigation'
 
-const APP_VERSION = 'v0.5.1'
+const APP_VERSION = 'v0.5.2'
 
 export default function Layout({ children }) {
   const today = new Date().toLocaleDateString('en-US', {

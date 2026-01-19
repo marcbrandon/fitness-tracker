@@ -3,9 +3,26 @@ import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
+const timeRanges = [
+  { key: 'today', label: 'Today', days: 0 },
+  { key: 'week', label: 'This Week', days: 7 },
+  { key: 'month', label: 'This Month', days: 30 },
+  { key: 'year', label: 'This Year', days: 365 },
+  { key: 'all', label: 'All Time', days: null },
+]
+
+function getStartDate(days) {
+  if (days === null) return null
+  if (days === 0) return new Date().toISOString().split('T')[0]
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split('T')[0]
+}
+
 export default function Dashboard() {
+  const [timeRange, setTimeRange] = useState('week')
   const [stats, setStats] = useState({
-    workoutsThisWeek: 0,
+    workoutCount: 0,
     totalExercises: 0,
     avgCalories: 0,
     avgProtein: 0,
@@ -17,23 +34,35 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchDashboardData = async () => {
       const today = new Date().toISOString().split('T')[0]
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split('T')[0]
+      const startDate = getStartDate(
+        timeRanges.find((r) => r.key === timeRange)?.days
+      )
+
+      // Build workout query
+      let workoutQuery = supabase
+        .from('workouts')
+        .select('*, workout_entries(count)')
+        .order('date', { ascending: false })
+        .limit(5)
+
+      if (startDate) {
+        workoutQuery = workoutQuery.gte('date', startDate)
+      }
+
+      // Build nutrition query
+      let nutritionQuery = supabase
+        .from('nutrition_logs')
+        .select('calories, protein')
+
+      if (startDate) {
+        nutritionQuery = nutritionQuery.gte('date', startDate)
+      }
 
       const [workoutsRes, exercisesRes, nutritionRes, todayNutritionRes] =
         await Promise.all([
-          supabase
-            .from('workouts')
-            .select('*, workout_entries(count)')
-            .gte('date', weekAgo)
-            .order('date', { ascending: false })
-            .limit(5),
+          workoutQuery,
           supabase.from('exercises').select('id', { count: 'exact' }),
-          supabase
-            .from('nutrition_logs')
-            .select('calories, protein')
-            .gte('date', weekAgo),
+          nutritionQuery,
           supabase
             .from('nutrition_logs')
             .select('*')
@@ -62,7 +91,7 @@ export default function Dashboard() {
           : 0
 
       setStats({
-        workoutsThisWeek: workouts.length,
+        workoutCount: workouts.length,
         totalExercises: exerciseCount,
         avgCalories,
         avgProtein,
@@ -73,7 +102,7 @@ export default function Dashboard() {
     }
 
     fetchDashboardData()
-  }, [])
+  }, [timeRange])
 
   const formatDate = (dateStr) => {
     return new Date(dateStr).toLocaleDateString('en-US', {
@@ -87,17 +116,36 @@ export default function Dashboard() {
     return <div className="text-muted-foreground">Loading dashboard...</div>
   }
 
+  const rangeLabel = timeRanges.find((r) => r.key === timeRange)?.label || ''
+
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Dashboard</h2>
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <h2 className="text-2xl font-bold">Dashboard</h2>
+        <div className="flex flex-wrap gap-2">
+          {timeRanges.map((range) => (
+            <button
+              key={range.key}
+              onClick={() => setTimeRange(range.key)}
+              className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+                timeRange === range.key
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background text-muted-foreground border-border hover:border-primary'
+              }`}
+            >
+              {range.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <Card>
           <CardContent className="pt-6">
             <div className="text-3xl font-bold text-primary">
-              {stats.workoutsThisWeek}
+              {stats.workoutCount}
             </div>
-            <div className="text-sm text-muted-foreground">Workouts this week</div>
+            <div className="text-sm text-muted-foreground">Workouts ({rangeLabel.toLowerCase()})</div>
           </CardContent>
         </Card>
         <Card>
@@ -113,7 +161,7 @@ export default function Dashboard() {
             <div className="text-3xl font-bold text-orange-600">
               {stats.avgCalories}
             </div>
-            <div className="text-sm text-muted-foreground">Avg calories/day</div>
+            <div className="text-sm text-muted-foreground">Avg cal/day ({rangeLabel.toLowerCase()})</div>
           </CardContent>
         </Card>
         <Card>
@@ -121,7 +169,7 @@ export default function Dashboard() {
             <div className="text-3xl font-bold text-purple-600">
               {stats.avgProtein}g
             </div>
-            <div className="text-sm text-muted-foreground">Avg protein/day</div>
+            <div className="text-sm text-muted-foreground">Avg protein/day ({rangeLabel.toLowerCase()})</div>
           </CardContent>
         </Card>
       </div>
