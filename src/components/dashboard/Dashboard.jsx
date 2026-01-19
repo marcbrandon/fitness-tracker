@@ -38,16 +38,21 @@ export default function Dashboard() {
         timeRanges.find((r) => r.key === timeRange)?.days
       )
 
-      // Build workout query
-      let workoutQuery = supabase
+      // Build workout count query (no limit)
+      let workoutCountQuery = supabase
+        .from('workouts')
+        .select('id', { count: 'exact', head: true })
+
+      if (startDate) {
+        workoutCountQuery = workoutCountQuery.gte('date', startDate)
+      }
+
+      // Build recent workouts query (limited to 5)
+      let recentWorkoutsQuery = supabase
         .from('workouts')
         .select('*, workout_entries(count)')
         .order('date', { ascending: false })
         .limit(5)
-
-      if (startDate) {
-        workoutQuery = workoutQuery.gte('date', startDate)
-      }
 
       // Build nutrition query
       let nutritionQuery = supabase
@@ -58,9 +63,10 @@ export default function Dashboard() {
         nutritionQuery = nutritionQuery.gte('date', startDate)
       }
 
-      const [workoutsRes, exercisesRes, nutritionRes, todayNutritionRes] =
+      const [workoutCountRes, recentWorkoutsRes, exercisesRes, nutritionRes, todayNutritionRes] =
         await Promise.all([
-          workoutQuery,
+          workoutCountQuery,
+          recentWorkoutsQuery,
           supabase.from('exercises').select('id', { count: 'exact' }),
           nutritionQuery,
           supabase
@@ -70,7 +76,8 @@ export default function Dashboard() {
             .single(),
         ])
 
-      const workouts = workoutsRes.data || []
+      const workoutCount = workoutCountRes.count || 0
+      const workouts = recentWorkoutsRes.data || []
       const exerciseCount = exercisesRes.count || 0
       const nutritionLogs = nutritionRes.data || []
 
@@ -91,7 +98,7 @@ export default function Dashboard() {
           : 0
 
       setStats({
-        workoutCount: workouts.length,
+        workoutCount,
         totalExercises: exerciseCount,
         avgCalories,
         avgProtein,
