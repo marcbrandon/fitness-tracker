@@ -112,7 +112,7 @@ export default function Dashboard() {
   }, [timeRange])
 
   const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
