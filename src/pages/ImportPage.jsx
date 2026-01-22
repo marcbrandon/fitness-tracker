@@ -111,7 +111,7 @@ export default function ImportPage() {
       // 2. Import nutrition (upsert by date)
       if (data.nutrition?.length > 0) {
         for (const log of data.nutrition) {
-          await supabase.from('nutrition_logs').upsert(
+          const { error: nutritionError } = await supabase.from('nutrition_logs').upsert(
             {
               user_id: user.id,
               date: log.date,
@@ -123,6 +123,9 @@ export default function ImportPage() {
             },
             { onConflict: 'user_id,date' }
           )
+          if (nutritionError) {
+            throw new Error(`Nutrition import failed for ${log.date}: ${nutritionError.message}`)
+          }
           stats.nutrition++
         }
       }
