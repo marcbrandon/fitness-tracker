@@ -108,21 +108,26 @@ export default function ImportPage() {
         exerciseNameToId[e.name.toLowerCase()] = e.id
       })
 
-      // 2. Import nutrition (upsert by date)
+      // 2. Import nutrition (delete existing then insert)
       if (data.nutrition?.length > 0) {
         for (const log of data.nutrition) {
-          const { error: nutritionError } = await supabase.from('nutrition_logs').upsert(
-            {
-              user_id: user.id,
-              date: log.date,
-              calories: log.calories || null,
-              protein: log.protein || null,
-              carbs: log.carbs || null,
-              fat: log.fat || null,
-              notes: log.notes || null,
-            },
-            { onConflict: 'user_id,date' }
-          )
+          // Delete existing record for this date
+          await supabase
+            .from('nutrition_logs')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('date', log.date)
+
+          // Insert new record
+          const { error: nutritionError } = await supabase.from('nutrition_logs').insert({
+            user_id: user.id,
+            date: log.date,
+            calories: log.calories || null,
+            protein: log.protein || null,
+            carbs: log.carbs || null,
+            fat: log.fat || null,
+            notes: log.notes || null,
+          })
           if (nutritionError) {
             throw new Error(`Nutrition import failed for ${log.date}: ${nutritionError.message}`)
           }
