@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
+import { ThemeProvider } from '@/hooks/useTheme'
 import ProtectedRoute from '@/components/auth/ProtectedRoute'
 import LoginPage from '@/pages/LoginPage'
 import ResetPasswordPage from '@/pages/ResetPasswordPage'
@@ -8,6 +9,7 @@ import WorkoutsPage from '@/pages/WorkoutsPage'
 import ExercisesPage from '@/pages/ExercisesPage'
 import NutritionPage from '@/pages/NutritionPage'
 import ImportPage from '@/pages/ImportPage'
+import SettingsPage from '@/pages/SettingsPage'
 
 function AppRoutes() {
   const { user, loading } = useAuth()
@@ -67,6 +69,14 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <SettingsPage />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   )
 }
@@ -74,9 +84,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   )
 }

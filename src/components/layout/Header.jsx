@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -45,6 +45,13 @@ export default function Header() {
                   <p className="text-sm font-medium truncate">{user.email}</p>
                 </div>
                 <div className="py-1">
+                  <Link
+                    to="/settings"
+                    onClick={() => setMenuOpen(false)}
+                    className="block px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    Settings
+                  </Link>
                   <Button
                     variant="ghost"
                     size="sm"
