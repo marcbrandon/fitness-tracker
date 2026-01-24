@@ -27,6 +27,9 @@
   * {
     @apply border-border;
   }
+  html, body {
+    @apply w-full h-full overflow-x-hidden;
+  }
   body {
     @apply bg-background text-foreground;
   }
