@@ -118,14 +118,14 @@ export default function ImportPage() {
             .eq('user_id', user.id)
             .eq('date', log.date)
 
-          // Insert new record
+          // Insert new record (round numbers to integers)
           const { error: nutritionError } = await supabase.from('nutrition_logs').insert({
             user_id: user.id,
             date: log.date,
-            calories: log.calories || null,
-            protein: log.protein || null,
-            carbs: log.carbs || null,
-            fat: log.fat || null,
+            calories: log.calories != null ? Math.round(log.calories) : null,
+            protein: log.protein != null ? Math.round(log.protein) : null,
+            carbs: log.carbs != null ? Math.round(log.carbs) : null,
+            fat: log.fat != null ? Math.round(log.fat) : null,
             notes: log.notes || null,
           })
           if (nutritionError) {
