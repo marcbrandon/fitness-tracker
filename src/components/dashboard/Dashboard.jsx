@@ -201,7 +201,7 @@ export default function Dashboard() {
                   <li key={workout.id} className="py-2">
                     <div className="font-medium">{formatDate(workout.date)}</div>
                     <div className="text-sm text-muted-foreground">
-                      {workout.workout_entries?.[0]?.count || 0} exercises
+                      {workout.workout_entries?.[0]?.count || 0} exercises{workout.notes && `, ${workout.notes}`}
                     </div>
                   </li>
                 ))}

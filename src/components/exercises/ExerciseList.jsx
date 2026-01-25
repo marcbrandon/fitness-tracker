@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -21,7 +22,7 @@ export default function ExerciseList() {
   const fetchExercises = async () => {
     const { data, error } = await supabase
       .from('exercises')
-      .select('*')
+      .select('*, workout_entries(count)')
       .order('name')
 
     if (!error) {
@@ -85,17 +86,28 @@ export default function ExerciseList() {
               <TableRow>
                 <TableHead>Exercise</TableHead>
                 <TableHead>Muscle Group</TableHead>
+                <TableHead>Sessions</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {exercises.map((exercise) => (
                 <TableRow key={exercise.id}>
-                  <TableCell className="font-medium">{exercise.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link
+                      to={`/exercises/${exercise.id}`}
+                      className="hover:text-primary hover:underline"
+                    >
+                      {exercise.name}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {exercise.muscle_group?.length > 0
                       ? exercise.muscle_group.join(', ')
                       : '-'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {exercise.workout_entries?.[0]?.count || 0}
                   </TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button

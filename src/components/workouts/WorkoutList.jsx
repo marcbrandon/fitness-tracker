@@ -109,7 +109,7 @@ export default function WorkoutList() {
                   <div>
                     <div className="font-semibold">{formatDate(workout.date)}</div>
                     <div className="text-sm text-muted-foreground">
-                      {workout.workout_entries?.length || 0} exercises
+                      {workout.workout_entries?.length || 0} exercises{workout.notes && `, ${workout.notes}`}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
