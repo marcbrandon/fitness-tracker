@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { useTheme } from '@/hooks/useTheme'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -29,10 +30,13 @@ const timeRanges = [
 
 export default function ExerciseDetail() {
   const { id } = useParams()
+  const { theme } = useTheme()
   const [exercise, setExercise] = useState(null)
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
   const [timeRange, setTimeRange] = useState('all')
+
+  const dotColor = theme === 'dark' ? '#ffffff' : '#000000'
 
   useEffect(() => {
     const fetchData = async () => {
@@ -244,7 +248,8 @@ export default function ExerciseDetail() {
                   dataKey="weight"
                   stroke="hsl(var(--primary))"
                   strokeWidth={2}
-                  dot={{ fill: 'hsl(var(--primary))' }}
+                  dot={{ r: 4, fill: dotColor }}
+                  activeDot={{ r: 6, fill: dotColor }}
                 />
               </LineChart>
             </ResponsiveContainer>
