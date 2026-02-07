@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -14,11 +14,30 @@ import {
 import WorkoutForm from './WorkoutForm'
 
 export default function WorkoutList() {
+  const [searchParams] = useSearchParams()
   const [workouts, setWorkouts] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingWorkout, setEditingWorkout] = useState(null)
   const [expandedWorkout, setExpandedWorkout] = useState(null)
+
+  const workoutRefs = useRef({})
+
+  // Auto-expand workout from URL parameter and scroll to it
+  useEffect(() => {
+    const expandId = searchParams.get('expand')
+    if (expandId) {
+      setExpandedWorkout(expandId)
+    }
+  }, [searchParams])
+
+  // Scroll to expanded workout after workouts load
+  useEffect(() => {
+    const expandId = searchParams.get('expand')
+    if (expandId && workouts.length > 0 && workoutRefs.current[expandId]) {
+      workoutRefs.current[expandId].scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [workouts, searchParams])
 
   const fetchWorkouts = async () => {
     const { data, error } = await supabase
@@ -97,7 +116,7 @@ export default function WorkoutList() {
       ) : (
         <div className="space-y-4">
           {workouts.map((workout) => (
-            <Card key={workout.id}>
+            <Card key={workout.id} ref={(el) => (workoutRefs.current[workout.id] = el)} className="scroll-mt-5">
               <CardHeader
                 className="cursor-pointer py-4"
                 onClick={() =>

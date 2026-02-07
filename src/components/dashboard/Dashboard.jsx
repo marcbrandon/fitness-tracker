@@ -199,10 +199,15 @@ export default function Dashboard() {
               <ul className="divide-y">
                 {recentWorkouts.map((workout) => (
                   <li key={workout.id} className="py-2">
-                    <div className="font-medium">{formatDate(workout.date)}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {workout.workout_entries?.[0]?.count || 0} exercises{workout.notes && `, ${workout.notes}`}
-                    </div>
+                    <Link
+                      to={`/workouts?expand=${workout.id}`}
+                      className="block hover:bg-muted/50 -mx-2 px-2 py-1 rounded transition-colors"
+                    >
+                      <div className="font-medium">{formatDate(workout.date)}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {workout.workout_entries?.[0]?.count || 0} exercises{workout.notes && `, ${workout.notes}`}
+                      </div>
+                    </Link>
                   </li>
                 ))}
               </ul>
