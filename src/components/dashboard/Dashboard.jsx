@@ -50,7 +50,7 @@ export default function Dashboard() {
       // Build recent workouts query (limited to 5)
       let recentWorkoutsQuery = supabase
         .from('workouts')
-        .select('*, workout_entries(count)')
+        .select('*, workout_entries(exercise_id)')
         .order('date', { ascending: false })
         .limit(5)
 
@@ -205,7 +205,7 @@ export default function Dashboard() {
                     >
                       <div className="font-medium">{formatDate(workout.date)}</div>
                       <div className="text-sm text-muted-foreground">
-                        {workout.workout_entries?.[0]?.count || 0} exercises{workout.notes && `, ${workout.notes}`}
+                        {new Set(workout.workout_entries?.map(e => e.exercise_id)).size || 0} exercises{workout.notes && `, ${workout.notes}`}
                       </div>
                     </Link>
                   </li>
