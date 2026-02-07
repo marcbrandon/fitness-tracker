@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -160,7 +161,16 @@ export default function WorkoutList() {
                           .map((entry) => (
                             <TableRow key={entry.id}>
                               <TableCell>
-                                {entry.exercises?.name || 'Unknown'}
+                                {entry.exercise_id ? (
+                                  <Link
+                                    to={`/exercises/${entry.exercise_id}`}
+                                    className="hover:text-primary hover:underline"
+                                  >
+                                    {entry.exercises?.name || 'Unknown'}
+                                  </Link>
+                                ) : (
+                                  entry.exercises?.name || 'Unknown'
+                                )}
                               </TableCell>
                               <TableCell>{entry.sets || '-'}</TableCell>
                               <TableCell>{entry.reps || '-'}</TableCell>
