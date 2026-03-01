@@ -1,10 +1,17 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import Header from './Header'
 import Navigation from './Navigation'
+import ChatButton from '@/components/chat/ChatButton'
+import ChatOverlay from '@/components/chat/ChatOverlay'
+import { useChat } from '@/hooks/useChat'
 
 const APP_VERSION = 'v0.7.0'
 
 export default function Layout({ children }) {
+  const [chatOpen, setChatOpen] = useState(false)
+  const chat = useChat()
+
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -30,6 +37,8 @@ export default function Layout({ children }) {
           </Link>
         </div>
       </footer>
+      <ChatButton isOpen={chatOpen} onClick={() => setChatOpen((o) => !o)} />
+      <ChatOverlay isOpen={chatOpen} onClose={() => setChatOpen(false)} chat={chat} />
     </div>
   )
 }

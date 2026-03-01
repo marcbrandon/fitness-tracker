@@ -11,6 +11,7 @@ import NutritionPage from '@/pages/NutritionPage'
 import ImportPage from '@/pages/ImportPage'
 import SettingsPage from '@/pages/SettingsPage'
 import ExerciseDetailPage from '@/pages/ExerciseDetailPage'
+import ChatPage from '@/pages/ChatPage'
 
 function AppRoutes() {
   const { user, loading } = useAuth()
@@ -83,6 +84,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <SettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/chat"
+        element={
+          <ProtectedRoute>
+            <ChatPage />
           </ProtectedRoute>
         }
       />
