@@ -58,8 +58,8 @@ export default function ChatButton({ isOpen, onClick, corner, onCornerChange }) 
   }
 
   const style = dragPos
-    ? { position: 'fixed', left: dragPos.x - 28, top: dragPos.y - 28, zIndex: 50 }
-    : { position: 'fixed', ...cornerStyle(corner), zIndex: 50 }
+    ? { position: 'fixed', left: dragPos.x - 28, top: dragPos.y - 28, zIndex: 50, touchAction: 'none' }
+    : { position: 'fixed', ...cornerStyle(corner), zIndex: 50, touchAction: 'none' }
 
   return (
     <button
