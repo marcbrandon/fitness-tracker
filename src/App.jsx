@@ -12,6 +12,7 @@ import ImportPage from '@/pages/ImportPage'
 import SettingsPage from '@/pages/SettingsPage'
 import ExerciseDetailPage from '@/pages/ExerciseDetailPage'
 import ChatPage from '@/pages/ChatPage'
+import { ChatProvider } from '@/hooks/useChatContext'
 
 function AppRoutes() {
   const { user, loading } = useAuth()
@@ -104,7 +105,9 @@ export default function App() {
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <AppRoutes />
+          <ChatProvider>
+            <AppRoutes />
+          </ChatProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
