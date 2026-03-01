@@ -37,7 +37,7 @@ export default function ChatInput({ onSend, isLoading }) {
         placeholder="Message AI Assistant..."
         disabled={isLoading}
         rows={1}
-        className="flex-1 resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 overflow-hidden"
+        className="flex-1 resize-none rounded-xl border border-input bg-background px-3 py-2 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 overflow-hidden text-base sm:text-sm"
         style={{ maxHeight: '120px' }}
       />
       <Button
