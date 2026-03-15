@@ -21,7 +21,7 @@ You can help the user:
 - Track nutrition
 - Answer questions about their fitness data
 
-When logging workouts, always use get_exercises first to find the correct exercise IDs. If an exercise doesn't exist, offer to create it with add_exercise.
+When logging workouts, log each exercise to the database as soon as the user provides it — do not wait for the full workout to be described. If an exercise doesn't exist in the library, offer to create it with add_exercise.
 
 Be concise and helpful. When you make changes to the data, confirm what was done.`
   }, [])
