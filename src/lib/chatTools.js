@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 export const TOOL_DEFINITIONS = [
   {
     name: 'get_recent_workouts',
-    description: 'Retrieve recent workouts with all exercise entries. Use this to check workout history.',
+    description: 'Retrieve recent workouts with all exercise entries. Use this to check workout history. If the user asks about a specific date, pass that date to avoid fetching unnecessary data.',
     input_schema: {
       type: 'object',
       properties: {
@@ -11,13 +11,17 @@ export const TOOL_DEFINITIONS = [
           type: 'number',
           description: 'Number of workouts to retrieve (default 6, max 20)',
         },
+        date: {
+          type: 'string',
+          description: 'Optional specific date in YYYY-MM-DD format. If provided, returns only the workout for that date.',
+        },
       },
       required: [],
     },
   },
   {
     name: 'log_workout',
-    description: 'Create or update a workout for a given date with exercise entries. If a workout already exists for that date it will be updated rather than duplicated. Use get_exercises first to find exercise IDs.',
+    description: 'Create or update a workout for a given date with exercise entries. If a workout already exists for that date it will be updated rather than duplicated. Provide exercise_name instead of exercise_id — the name will be matched case-insensitively against the exercise library. If multiple exercises match, they will be returned for clarification.',
     input_schema: {
       type: 'object',
       properties: {
@@ -35,13 +39,13 @@ export const TOOL_DEFINITIONS = [
           items: {
             type: 'object',
             properties: {
-              exercise_id: { type: 'string', description: 'UUID of the exercise' },
+              exercise_name: { type: 'string', description: 'Name of the exercise — matched case-insensitively against the library' },
               sets: { type: 'number', description: 'Number of sets' },
               reps: { type: 'number', description: 'Number of reps per set' },
               weight: { type: 'number', description: 'Weight in lbs' },
               notes: { type: 'string', description: 'Optional notes for this entry' },
             },
-            required: ['exercise_id'],
+            required: ['exercise_name'],
           },
         },
       },
@@ -74,7 +78,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'get_exercises',
-    description: 'Get all available exercises in the user\'s library. Use this to find exercise IDs before logging workouts.',
+    description: 'Get all available exercises in the user\'s library. Use this to browse exercises or find IDs.',
     input_schema: {
       type: 'object',
       properties: {
@@ -134,19 +138,24 @@ export const TOOL_DEFINITIONS = [
 export async function executeTool(name, input) {
   switch (name) {
     case 'get_recent_workouts': {
-      const limit = Math.min(input.limit ?? 6, 20)
-      const { data, error } = await supabase
+      let query = supabase
         .from('workouts')
         .select(`
-          *,
+          id, date, notes,
           workout_entries (
-            *,
+            sets, reps, weight, notes,
             exercises (name, muscle_group)
           )
         `)
         .order('date', { ascending: false })
-        .limit(limit)
 
+      if (input.date) {
+        query = query.eq('date', input.date)
+      } else {
+        query = query.limit(Math.min(input.limit ?? 6, 20))
+      }
+
+      const { data, error } = await query
       if (error) return { error: error.message }
       return data
     }
@@ -154,6 +163,31 @@ export async function executeTool(name, input) {
     case 'log_workout': {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return { error: 'Not authenticated' }
+
+      // Resolve exercise names to IDs
+      const resolvedEntries = []
+      for (const entry of input.entries ?? []) {
+        const { data: matches, error: matchError } = await supabase
+          .from('exercises')
+          .select('id, name')
+          .ilike('name', `%${entry.exercise_name}%`)
+
+        if (matchError) return { error: matchError.message }
+
+        if (!matches?.length) {
+          return {
+            error: `No exercise found matching "${entry.exercise_name}". Use add_exercise to create it, or get_exercises to browse the library.`,
+          }
+        }
+        if (matches.length > 1) {
+          return {
+            error: `Multiple exercises match "${entry.exercise_name}" — please clarify which one you mean.`,
+            matches: matches.map((m) => ({ id: m.id, name: m.name })),
+          }
+        }
+
+        resolvedEntries.push({ ...entry, exercise_id: matches[0].id })
+      }
 
       // Check for an existing workout on this date to avoid duplicates
       const { data: existing } = await supabase
@@ -180,7 +214,7 @@ export async function executeTool(name, input) {
         workoutId = workout.id
       }
 
-      if (input.entries?.length > 0) {
+      if (resolvedEntries.length > 0) {
         // Append after any existing entries
         const { data: existingEntries } = await supabase
           .from('workout_entries')
@@ -191,7 +225,7 @@ export async function executeTool(name, input) {
 
         const startIndex = existingEntries?.length > 0 ? existingEntries[0].order_index + 1 : 0
 
-        const entries = input.entries.map((entry, i) => ({
+        const entries = resolvedEntries.map((entry, i) => ({
           workout_id: workoutId,
           exercise_id: entry.exercise_id,
           sets: entry.sets,
@@ -238,7 +272,7 @@ export async function executeTool(name, input) {
     case 'get_exercises': {
       let query = supabase
         .from('exercises')
-        .select('*')
+        .select('id, name, muscle_group, description')
         .order('name')
 
       if (input.muscle_group) {
@@ -298,7 +332,7 @@ export async function executeTool(name, input) {
       const limit = Math.min(input.limit ?? 7, 14)
       const { data, error } = await supabase
         .from('nutrition_logs')
-        .select('*')
+        .select('date, calories, protein, carbs, fat, notes')
         .order('date', { ascending: false })
         .limit(limit)
 
