@@ -9,7 +9,7 @@ export const TOOL_DEFINITIONS = [
       properties: {
         limit: {
           type: 'number',
-          description: 'Number of workouts to retrieve (default 10, max 50)',
+          description: 'Number of workouts to retrieve (default 6, max 20)',
         },
       },
       required: [],
@@ -123,7 +123,7 @@ export const TOOL_DEFINITIONS = [
       properties: {
         limit: {
           type: 'number',
-          description: 'Number of days to retrieve (default 7, max 30)',
+          description: 'Number of days to retrieve (default 7, max 14)',
         },
       },
       required: [],
@@ -134,7 +134,7 @@ export const TOOL_DEFINITIONS = [
 export async function executeTool(name, input) {
   switch (name) {
     case 'get_recent_workouts': {
-      const limit = Math.min(input.limit ?? 10, 50)
+      const limit = Math.min(input.limit ?? 6, 20)
       const { data, error } = await supabase
         .from('workouts')
         .select(`
@@ -295,7 +295,7 @@ export async function executeTool(name, input) {
     }
 
     case 'get_nutrition': {
-      const limit = Math.min(input.limit ?? 7, 30)
+      const limit = Math.min(input.limit ?? 7, 14)
       const { data, error } = await supabase
         .from('nutrition_logs')
         .select('*')
