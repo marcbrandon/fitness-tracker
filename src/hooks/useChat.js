@@ -11,9 +11,11 @@ export function useChat() {
   const [systemPrompt, setSystemPrompt] = useState(null)
 
   const buildSystemPrompt = useCallback(() => {
-    const today = new Date().toISOString().split('T')[0]
+    const now = new Date()
+    const today = now.toLocaleDateString('en-CA') // YYYY-MM-DD in local time
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
-    return `You are a personal fitness assistant with read and write access to the user's fitness data. Today's date is ${today}.
+    return `You are a personal fitness assistant with read and write access to the user's fitness data. Today's date is ${today} (${timezone}).
 
 You can help the user:
 - Log new workouts and exercises
