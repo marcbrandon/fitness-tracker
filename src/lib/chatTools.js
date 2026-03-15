@@ -77,6 +77,47 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'update_workout_entry',
+    description: 'Update a specific exercise entry within a workout. Use this to fix sets, reps, weight, notes, or the exercise itself. Entry IDs are returned by get_recent_workouts.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        entry_id: { type: 'string', description: 'UUID of the workout entry to update' },
+        exercise_name: { type: 'string', description: 'New exercise name — matched case-insensitively. Provide this to change which exercise the entry is for.' },
+        sets: { type: 'number', description: 'New number of sets' },
+        reps: { type: 'number', description: 'New number of reps per set' },
+        weight: { type: 'number', description: 'New weight in lbs' },
+        notes: { type: 'string', description: 'New notes for this entry' },
+      },
+      required: ['entry_id'],
+    },
+  },
+  {
+    name: 'delete_workout_entry',
+    description: 'Delete a single exercise entry from a workout without affecting other entries. Entry IDs are returned by get_recent_workouts.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        entry_id: { type: 'string', description: 'UUID of the workout entry to delete' },
+      },
+      required: ['entry_id'],
+    },
+  },
+  {
+    name: 'update_exercise',
+    description: 'Update an exercise in the library — rename it or change its muscle group or description.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        exercise_id: { type: 'string', description: 'UUID of the exercise to update' },
+        name: { type: 'string', description: 'New name for the exercise' },
+        muscle_group: { type: 'string', description: 'New muscle group' },
+        description: { type: 'string', description: 'New description' },
+      },
+      required: ['exercise_id'],
+    },
+  },
+  {
     name: 'get_exercises',
     description: 'Get all available exercises in the user\'s library. Use this to browse exercises or find IDs.',
     input_schema: {
@@ -143,7 +184,7 @@ export async function executeTool(name, input) {
         .select(`
           id, date, notes,
           workout_entries (
-            sets, reps, weight, notes,
+            id, sets, reps, weight, notes,
             exercises (name, muscle_group)
           )
         `)
@@ -269,6 +310,56 @@ export async function executeTool(name, input) {
       return { success: true }
     }
 
+    case 'update_workout_entry': {
+      const updates = {}
+
+      if (input.exercise_name) {
+        const { data: matches, error: matchError } = await supabase
+          .from('exercises')
+          .select('id, name')
+          .ilike('name', `%${input.exercise_name}%`)
+
+        if (matchError) return { error: matchError.message }
+
+        if (!matches?.length) {
+          return {
+            error: `No exercise found matching "${input.exercise_name}". Use add_exercise to create it, or get_exercises to browse the library.`,
+          }
+        }
+        if (matches.length > 1) {
+          return {
+            error: `Multiple exercises match "${input.exercise_name}" — please clarify which one you mean.`,
+            matches: matches.map((m) => ({ id: m.id, name: m.name })),
+          }
+        }
+
+        updates.exercise_id = matches[0].id
+      }
+
+      if (input.sets !== undefined) updates.sets = input.sets
+      if (input.reps !== undefined) updates.reps = input.reps
+      if (input.weight !== undefined) updates.weight = input.weight
+      if (input.notes !== undefined) updates.notes = input.notes
+
+      const { error } = await supabase
+        .from('workout_entries')
+        .update(updates)
+        .eq('id', input.entry_id)
+
+      if (error) return { error: error.message }
+      return { success: true }
+    }
+
+    case 'delete_workout_entry': {
+      const { error } = await supabase
+        .from('workout_entries')
+        .delete()
+        .eq('id', input.entry_id)
+
+      if (error) return { error: error.message }
+      return { success: true }
+    }
+
     case 'get_exercises': {
       let query = supabase
         .from('exercises')
@@ -282,6 +373,21 @@ export async function executeTool(name, input) {
       const { data, error } = await query
       if (error) return { error: error.message }
       return data
+    }
+
+    case 'update_exercise': {
+      const updates = {}
+      if (input.name !== undefined) updates.name = input.name
+      if (input.muscle_group !== undefined) updates.muscle_group = input.muscle_group
+      if (input.description !== undefined) updates.description = input.description
+
+      const { error } = await supabase
+        .from('exercises')
+        .update(updates)
+        .eq('id', input.exercise_id)
+
+      if (error) return { error: error.message }
+      return { success: true }
     }
 
     case 'add_exercise': {
