@@ -35,8 +35,8 @@ Be concise and helpful. When you make changes to the data, confirm what was done
     setMessages([])
     setApiMessages([])
     setError(null)
-    setSystemPrompt(null) // Force re-fetch next open
-  }, [])
+    setSystemPrompt(buildSystemPrompt())
+  }, [buildSystemPrompt])
 
   const sendMessage = useCallback(async (text) => {
     if (!text.trim() || isLoading) return
