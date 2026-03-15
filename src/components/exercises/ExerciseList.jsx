@@ -18,6 +18,7 @@ export default function ExerciseList() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingExercise, setEditingExercise] = useState(null)
+  const [selectedGroup, setSelectedGroup] = useState(null)
 
   const fetchExercises = async () => {
     const { data, error } = await supabase
@@ -44,6 +45,11 @@ export default function ExerciseList() {
     }
   }
 
+  const muscleGroups = [...new Set(exercises.flatMap((e) => e.muscle_group ?? []))].sort()
+  const filtered = selectedGroup
+    ? exercises.filter((e) => e.muscle_group?.includes(selectedGroup))
+    : exercises
+
   if (loading) {
     return <div className="text-muted-foreground">Loading exercises...</div>
   }
@@ -51,7 +57,7 @@ export default function ExerciseList() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Exercise Library</h2>
+        <h2 className="text-2xl font-bold">{filtered.length} Exercises</h2>
         <Button
           onClick={() => {
             setShowForm(!showForm)
@@ -61,6 +67,21 @@ export default function ExerciseList() {
           {showForm ? 'Cancel' : 'Add Exercise'}
         </Button>
       </div>
+
+      {muscleGroups.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          {muscleGroups.map((group) => (
+            <Button
+              key={group}
+              variant={selectedGroup === group ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setSelectedGroup(selectedGroup === group ? null : group)}
+            >
+              {group}
+            </Button>
+          ))}
+        </div>
+      )}
 
       {(showForm || editingExercise) && (
         <ExerciseForm
@@ -77,8 +98,10 @@ export default function ExerciseList() {
         />
       )}
 
-      {exercises.length === 0 ? (
-        <p className="text-muted-foreground">No exercises yet. Add one above!</p>
+      {filtered.length === 0 ? (
+        <p className="text-muted-foreground">
+          {exercises.length === 0 ? 'No exercises yet. Add one above!' : 'No exercises match the selected filter.'}
+        </p>
       ) : (
         <Card>
           <Table>
@@ -91,7 +114,7 @@ export default function ExerciseList() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {exercises.map((exercise) => (
+              {filtered.map((exercise) => (
                 <TableRow key={exercise.id}>
                   <TableCell className="font-medium">
                     <Link
