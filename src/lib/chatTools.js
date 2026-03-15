@@ -17,7 +17,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'log_workout',
-    description: 'Create a new workout with exercise entries. Use get_exercises first to find exercise IDs.',
+    description: 'Create or update a workout for a given date with exercise entries. If a workout already exists for that date it will be updated rather than duplicated. Use get_exercises first to find exercise IDs.',
     input_schema: {
       type: 'object',
       properties: {
@@ -155,23 +155,50 @@ export async function executeTool(name, input) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return { error: 'Not authenticated' }
 
-      const { data: workout, error: workoutError } = await supabase
+      // Check for an existing workout on this date to avoid duplicates
+      const { data: existing } = await supabase
         .from('workouts')
-        .insert({ date: input.date, notes: input.notes, user_id: user.id })
-        .select()
-        .single()
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('date', input.date)
+        .maybeSingle()
 
-      if (workoutError) return { error: workoutError.message }
+      let workoutId
+      if (existing) {
+        workoutId = existing.id
+        if (input.notes !== undefined) {
+          await supabase.from('workouts').update({ notes: input.notes }).eq('id', workoutId)
+        }
+      } else {
+        const { data: workout, error: workoutError } = await supabase
+          .from('workouts')
+          .insert({ date: input.date, notes: input.notes, user_id: user.id })
+          .select()
+          .single()
+
+        if (workoutError) return { error: workoutError.message }
+        workoutId = workout.id
+      }
 
       if (input.entries?.length > 0) {
+        // Append after any existing entries
+        const { data: existingEntries } = await supabase
+          .from('workout_entries')
+          .select('order_index')
+          .eq('workout_id', workoutId)
+          .order('order_index', { ascending: false })
+          .limit(1)
+
+        const startIndex = existingEntries?.length > 0 ? existingEntries[0].order_index + 1 : 0
+
         const entries = input.entries.map((entry, i) => ({
-          workout_id: workout.id,
+          workout_id: workoutId,
           exercise_id: entry.exercise_id,
           sets: entry.sets,
           reps: entry.reps,
           weight: entry.weight,
           notes: entry.notes,
-          order_index: i,
+          order_index: startIndex + i,
         }))
 
         const { error: entriesError } = await supabase
@@ -181,7 +208,7 @@ export async function executeTool(name, input) {
         if (entriesError) return { error: entriesError.message }
       }
 
-      return { success: true, workout_id: workout.id, date: workout.date }
+      return { success: true, workout_id: workoutId, date: input.date, updated: !!existing }
     }
 
     case 'update_workout': {

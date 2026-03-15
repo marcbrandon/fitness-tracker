@@ -10,29 +10,8 @@ export function useChat() {
   const [error, setError] = useState(null)
   const [systemPrompt, setSystemPrompt] = useState(null)
 
-  const buildSystemPrompt = useCallback(async () => {
+  const buildSystemPrompt = useCallback(() => {
     const today = new Date().toISOString().split('T')[0]
-
-    const [workoutsResult, exercisesResult] = await Promise.all([
-      supabase
-        .from('workouts')
-        .select(`
-          *,
-          workout_entries (
-            *,
-            exercises (name, muscle_group)
-          )
-        `)
-        .order('date', { ascending: false })
-        .limit(10),
-      supabase
-        .from('exercises')
-        .select('*')
-        .order('name'),
-    ])
-
-    const recentWorkouts = workoutsResult.data ?? []
-    const exercises = exercisesResult.data ?? []
 
     return `You are a personal fitness assistant with read and write access to the user's fitness data. Today's date is ${today}.
 
@@ -44,23 +23,12 @@ You can help the user:
 
 When logging workouts, always use get_exercises first to find the correct exercise IDs. If an exercise doesn't exist, offer to create it with add_exercise.
 
-Current exercise library (${exercises.length} exercises):
-${JSON.stringify(exercises, null, 2)}
-
-Recent workout history (last ${recentWorkouts.length} workouts):
-${JSON.stringify(recentWorkouts, null, 2)}
-
 Be concise and helpful. When you make changes to the data, confirm what was done.`
   }, [])
 
-  const initChat = useCallback(async () => {
+  const initChat = useCallback(() => {
     if (systemPrompt) return // Already initialized
-    try {
-      const prompt = await buildSystemPrompt()
-      setSystemPrompt(prompt)
-    } catch (err) {
-      setError('Failed to load fitness data for context.')
-    }
+    setSystemPrompt(buildSystemPrompt())
   }, [systemPrompt, buildSystemPrompt])
 
   const clearChat = useCallback(() => {
@@ -151,9 +119,12 @@ Be concise and helpful. When you make changes to the data, confirm what was done
           const assistantText = textBlock?.text ?? ''
 
           setMessages((prev) => [...prev, { role: 'assistant', content: assistantText }])
+          // Compress: discard intermediate tool use/result pairs — only persist the
+          // user's text message and the assistant's final text reply to keep history lean.
           setApiMessages([
-            ...currentApiMessages,
-            { role: 'assistant', content: response.content },
+            ...apiMessages,
+            { role: 'user', content: text.trim() },
+            { role: 'assistant', content: assistantText },
           ])
           break
         } else {
