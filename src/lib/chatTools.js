@@ -378,7 +378,7 @@ export async function executeTool(name, input) {
     case 'update_exercise': {
       const updates = {}
       if (input.name !== undefined) updates.name = input.name
-      if (input.muscle_group !== undefined) updates.muscle_group = input.muscle_group
+      if (input.muscle_group !== undefined) updates.muscle_group = [input.muscle_group]
       if (input.description !== undefined) updates.description = input.description
 
       const { error } = await supabase
@@ -398,7 +398,7 @@ export async function executeTool(name, input) {
         .from('exercises')
         .insert({
           name: input.name,
-          muscle_group: input.muscle_group,
+          muscle_group: input.muscle_group ? [input.muscle_group] : [],
           description: input.description,
           user_id: user.id,
         })
