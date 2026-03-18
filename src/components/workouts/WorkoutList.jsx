@@ -14,22 +14,14 @@ import {
 import WorkoutForm from './WorkoutForm'
 
 export default function WorkoutList() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [workouts, setWorkouts] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingWorkout, setEditingWorkout] = useState(null)
-  const [expandedWorkout, setExpandedWorkout] = useState(null)
 
+  const expandedWorkout = searchParams.get('expand')
   const workoutRefs = useRef({})
-
-  // Auto-expand workout from URL parameter and scroll to it
-  useEffect(() => {
-    const expandId = searchParams.get('expand')
-    if (expandId) {
-      setExpandedWorkout(expandId)
-    }
-  }, [searchParams])
 
   // Scroll to expanded workout after workouts load
   useEffect(() => {
@@ -125,11 +117,13 @@ export default function WorkoutList() {
             <Card key={workout.id} ref={(el) => (workoutRefs.current[workout.id] = el)} className="scroll-mt-5">
               <CardHeader
                 className="cursor-pointer py-4"
-                onClick={() =>
-                  setExpandedWorkout(
-                    expandedWorkout === workout.id ? null : workout.id
-                  )
-                }
+                onClick={() => {
+                  if (expandedWorkout === workout.id) {
+                    setSearchParams({})
+                  } else {
+                    setSearchParams({ expand: workout.id })
+                  }
+                }}
               >
                 <div className="flex justify-between items-center">
                   <div>
