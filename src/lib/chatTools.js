@@ -176,6 +176,10 @@ export const TOOL_DEFINITIONS = [
   },
 ]
 
+function notifyDataChanged(type) {
+  window.dispatchEvent(new CustomEvent('fitness-data-changed', { detail: { type } }))
+}
+
 export async function executeTool(name, input) {
   switch (name) {
     case 'get_recent_workouts': {
@@ -283,6 +287,7 @@ export async function executeTool(name, input) {
         if (entriesError) return { error: entriesError.message }
       }
 
+      notifyDataChanged('workout')
       return { success: true, workout_id: workoutId, date: input.date, updated: !!existing }
     }
 
@@ -297,6 +302,7 @@ export async function executeTool(name, input) {
         .eq('id', input.workout_id)
 
       if (error) return { error: error.message }
+      notifyDataChanged('workout')
       return { success: true }
     }
 
@@ -307,6 +313,7 @@ export async function executeTool(name, input) {
         .eq('id', input.workout_id)
 
       if (error) return { error: error.message }
+      notifyDataChanged('workout')
       return { success: true }
     }
 
@@ -347,6 +354,7 @@ export async function executeTool(name, input) {
         .eq('id', input.entry_id)
 
       if (error) return { error: error.message }
+      notifyDataChanged('workout')
       return { success: true }
     }
 
@@ -357,6 +365,7 @@ export async function executeTool(name, input) {
         .eq('id', input.entry_id)
 
       if (error) return { error: error.message }
+      notifyDataChanged('workout')
       return { success: true }
     }
 
@@ -378,7 +387,7 @@ export async function executeTool(name, input) {
     case 'update_exercise': {
       const updates = {}
       if (input.name !== undefined) updates.name = input.name
-      if (input.muscle_group !== undefined) updates.muscle_group = [input.muscle_group]
+      if (input.muscle_group !== undefined) updates.muscle_group = [input.muscle_group.charAt(0).toUpperCase() + input.muscle_group.slice(1)]
       if (input.description !== undefined) updates.description = input.description
 
       const { error } = await supabase
@@ -387,6 +396,7 @@ export async function executeTool(name, input) {
         .eq('id', input.exercise_id)
 
       if (error) return { error: error.message }
+      notifyDataChanged('exercise')
       return { success: true }
     }
 
@@ -398,7 +408,7 @@ export async function executeTool(name, input) {
         .from('exercises')
         .insert({
           name: input.name,
-          muscle_group: input.muscle_group ? [input.muscle_group] : [],
+          muscle_group: input.muscle_group ? [input.muscle_group.charAt(0).toUpperCase() + input.muscle_group.slice(1)] : [],
           description: input.description,
           user_id: user.id,
         })
@@ -406,6 +416,7 @@ export async function executeTool(name, input) {
         .single()
 
       if (error) return { error: error.message }
+      notifyDataChanged('exercise')
       return { success: true, exercise_id: data.id, name: data.name }
     }
 
@@ -431,6 +442,7 @@ export async function executeTool(name, input) {
         .single()
 
       if (error) return { error: error.message }
+      notifyDataChanged('nutrition')
       return { success: true, date: data.date }
     }
 

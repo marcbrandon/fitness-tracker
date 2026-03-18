@@ -61,6 +61,12 @@ export default function WorkoutList() {
     fetchWorkouts()
   }, [])
 
+  useEffect(() => {
+    const handler = (e) => { if (e.detail?.type === 'workout') fetchWorkouts() }
+    window.addEventListener('fitness-data-changed', handler)
+    return () => window.removeEventListener('fitness-data-changed', handler)
+  }, [])
+
   const handleDelete = async (id) => {
     if (!confirm('Delete this workout?')) return
 
