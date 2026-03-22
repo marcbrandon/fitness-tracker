@@ -52,19 +52,19 @@ export default function ImportPage() {
       const exerciseNameToId = {}
 
       if (data.exercises?.length > 0) {
-        const { data: existing } = await supabase
+        // Check global library — exercises are now shared across accounts
+        const { data: globalExercises } = await supabase
           .from('exercises')
-          .select('id, name')
-          .eq('user_id', user.id)
+          .select('id, name, user_id')
 
-        const existingByName = {}
-        existing?.forEach((e) => {
-          existingByName[e.name.toLowerCase()] = e
+        const globalByName = {}
+        globalExercises?.forEach((e) => {
+          globalByName[e.name.toLowerCase()] = e
         })
 
         for (const exercise of data.exercises) {
           const key = exercise.name.toLowerCase()
-          const existingExercise = existingByName[key]
+          const existing = globalByName[key]
 
           // Support both muscle_groups array and legacy muscle_group string
           let muscleGroups = exercise.muscle_groups
@@ -72,12 +72,16 @@ export default function ImportPage() {
             muscleGroups = [exercise.muscle_group]
           }
 
-          if (existingExercise) {
-            await supabase
-              .from('exercises')
-              .update({ muscle_group: muscleGroups || null })
-              .eq('id', existingExercise.id)
-            exerciseNameToId[key] = existingExercise.id
+          let exerciseId
+          if (existing) {
+            exerciseId = existing.id
+            // Only update muscle_group if user owns this exercise
+            if (existing.user_id === user.id && muscleGroups) {
+              await supabase
+                .from('exercises')
+                .update({ muscle_group: muscleGroups })
+                .eq('id', existing.id)
+            }
           } else {
             const { data: newExercise } = await supabase
               .from('exercises')
@@ -90,21 +94,28 @@ export default function ImportPage() {
               .single()
 
             if (newExercise) {
-              exerciseNameToId[key] = newExercise.id
-              existingByName[key] = newExercise
+              exerciseId = newExercise.id
+              globalByName[key] = newExercise
             }
+          }
+
+          if (exerciseId) {
+            // Subscribe user to this exercise, ignore if already subscribed
+            await supabase
+              .from('user_exercise_library')
+              .upsert({ exercise_id: exerciseId, user_id: user.id }, { onConflict: 'user_id,exercise_id', ignoreDuplicates: true })
+            exerciseNameToId[key] = exerciseId
           }
           stats.exercises++
         }
       }
 
-      // Refresh exercise mapping to include all exercises (for workout entries)
-      const { data: allExercises } = await supabase
+      // Refresh exercise mapping from user's library (for workout entry resolution)
+      const { data: libraryExercises } = await supabase
         .from('exercises')
-        .select('id, name')
-        .eq('user_id', user.id)
+        .select('id, name, user_exercise_library!inner(user_id)')
 
-      allExercises?.forEach((e) => {
+      libraryExercises?.forEach((e) => {
         exerciseNameToId[e.name.toLowerCase()] = e.id
       })
 
