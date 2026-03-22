@@ -13,7 +13,10 @@ export default function ExerciseSelect({ value, onChange }) {
 
   useEffect(() => {
     const fetchExercises = async () => {
-      const { data } = await supabase.from('exercises').select('*').order('name')
+      const { data } = await supabase
+        .from('exercises')
+        .select('id, name, muscle_group, user_exercise_library!inner(user_id)')
+        .order('name')
       if (data) setExercises(data)
     }
     fetchExercises()

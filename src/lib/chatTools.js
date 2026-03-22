@@ -372,7 +372,7 @@ export async function executeTool(name, input) {
     case 'get_exercises': {
       let query = supabase
         .from('exercises')
-        .select('id, name, muscle_group, description')
+        .select('id, name, muscle_group, description, user_exercise_library!inner(user_id)')
         .order('name')
 
       if (input.muscle_group) {
@@ -385,17 +385,46 @@ export async function executeTool(name, input) {
     }
 
     case 'update_exercise': {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return { error: 'Not authenticated' }
+
       const updates = {}
       if (input.name !== undefined) updates.name = input.name
       if (input.muscle_group !== undefined) updates.muscle_group = [input.muscle_group.charAt(0).toUpperCase() + input.muscle_group.slice(1)]
       if (input.description !== undefined) updates.description = input.description
 
-      const { error } = await supabase
+      // Check ownership — fork if global or another user's exercise
+      const { data: existing } = await supabase
         .from('exercises')
-        .update(updates)
+        .select('id, user_id, name, muscle_group, description')
         .eq('id', input.exercise_id)
+        .single()
 
-      if (error) return { error: error.message }
+      if (!existing) return { error: 'Exercise not found' }
+
+      if (existing.user_id === user.id) {
+        const { error } = await supabase.from('exercises').update(updates).eq('id', input.exercise_id)
+        if (error) return { error: error.message }
+      } else {
+        const { data: fork, error: forkError } = await supabase
+          .from('exercises')
+          .insert({
+            name: updates.name ?? existing.name,
+            muscle_group: updates.muscle_group ?? existing.muscle_group,
+            description: updates.description ?? existing.description,
+            user_id: user.id,
+          })
+          .select()
+          .single()
+        if (forkError) return { error: forkError.message }
+
+        const { error: libError } = await supabase
+          .from('user_exercise_library')
+          .update({ exercise_id: fork.id })
+          .eq('exercise_id', input.exercise_id)
+        if (libError) return { error: libError.message }
+      }
+
       notifyDataChanged('exercise')
       return { success: true }
     }
@@ -404,20 +433,37 @@ export async function executeTool(name, input) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return { error: 'Not authenticated' }
 
-      const { data, error } = await supabase
-        .from('exercises')
-        .insert({
-          name: input.name,
-          muscle_group: input.muscle_group ? [input.muscle_group.charAt(0).toUpperCase() + input.muscle_group.slice(1)] : [],
-          description: input.description,
-          user_id: user.id,
-        })
-        .select()
-        .single()
+      const muscleGroup = input.muscle_group
+        ? [input.muscle_group.charAt(0).toUpperCase() + input.muscle_group.slice(1)]
+        : []
 
-      if (error) return { error: error.message }
+      // Reuse existing global exercise if name matches
+      const { data: existing } = await supabase
+        .from('exercises')
+        .select('id, name')
+        .ilike('name', input.name.trim())
+        .maybeSingle()
+
+      let exerciseId
+      if (existing) {
+        exerciseId = existing.id
+      } else {
+        const { data: created, error: createError } = await supabase
+          .from('exercises')
+          .insert({ name: input.name, muscle_group: muscleGroup, description: input.description, user_id: user.id })
+          .select()
+          .single()
+        if (createError) return { error: createError.message }
+        exerciseId = created.id
+      }
+
+      const { error: libError } = await supabase
+        .from('user_exercise_library')
+        .insert({ exercise_id: exerciseId, user_id: user.id })
+      if (libError && !libError.message.includes('duplicate')) return { error: libError.message }
+
       notifyDataChanged('exercise')
-      return { success: true, exercise_id: data.id, name: data.name }
+      return { success: true, exercise_id: exerciseId, name: existing?.name ?? input.name }
     }
 
     case 'log_nutrition': {

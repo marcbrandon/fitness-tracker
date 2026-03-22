@@ -23,7 +23,7 @@ export default function ExerciseList() {
   const fetchExercises = async () => {
     const { data, error } = await supabase
       .from('exercises')
-      .select('*, workout_entries(count)')
+      .select('*, workout_entries(count), user_exercise_library!inner(user_id)')
       .order('name')
 
     if (!error) {
@@ -43,9 +43,13 @@ export default function ExerciseList() {
   }, [])
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this exercise?')) return
+    if (!confirm('Remove this exercise from your library?')) return
 
-    const { error } = await supabase.from('exercises').delete().eq('id', id)
+    const { error } = await supabase
+      .from('user_exercise_library')
+      .delete()
+      .eq('exercise_id', id)
+
     if (!error) {
       setExercises(exercises.filter((e) => e.id !== id))
     }
@@ -155,7 +159,7 @@ export default function ExerciseList() {
                       onClick={() => handleDelete(exercise.id)}
                       className="text-destructive hover:text-destructive"
                     >
-                      Delete
+                      Remove
                     </Button>
                   </TableCell>
                 </TableRow>

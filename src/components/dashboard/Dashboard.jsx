@@ -67,7 +67,7 @@ export default function Dashboard() {
         await Promise.all([
           workoutCountQuery,
           recentWorkoutsQuery,
-          supabase.from('exercises').select('id', { count: 'exact' }),
+          supabase.from('user_exercise_library').select('id', { count: 'exact' }),
           nutritionQuery,
           supabase
             .from('nutrition_logs')

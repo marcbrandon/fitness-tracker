@@ -40,7 +40,6 @@ export default function ExerciseForm({ existingExercise, onSuccess, onCancel }) 
       const { data } = await supabase
         .from('exercises')
         .select('muscle_group')
-        .eq('user_id', user.id)
 
       if (data) {
         const dbGroups = data
@@ -84,26 +83,58 @@ export default function ExerciseForm({ existingExercise, onSuccess, onCancel }) 
       muscle_group: selectedGroups?.length > 0 ? selectedGroups : null,
     }
 
-    let result
     if (existingExercise) {
-      result = await supabase
-        .from('exercises')
-        .update(data)
-        .eq('id', existingExercise.id)
+      // Fork if editing a global or another user's exercise; edit in place if already ours
+      if (existingExercise.user_id === user.id) {
+        const { error } = await supabase
+          .from('exercises')
+          .update(data)
+          .eq('id', existingExercise.id)
+        if (error) { setError(error.message); setLoading(false); return }
+      } else {
+        const { data: fork, error: forkError } = await supabase
+          .from('exercises')
+          .insert({ ...data, user_id: user.id })
+          .select()
+          .single()
+        if (forkError) { setError(forkError.message); setLoading(false); return }
+
+        const { error: libError } = await supabase
+          .from('user_exercise_library')
+          .update({ exercise_id: fork.id })
+          .eq('exercise_id', existingExercise.id)
+        if (libError) { setError(libError.message); setLoading(false); return }
+      }
     } else {
-      result = await supabase.from('exercises').insert({
-        ...data,
-        user_id: user.id,
-      })
+      // Check if a global exercise with this name already exists
+      const { data: existing } = await supabase
+        .from('exercises')
+        .select('id')
+        .ilike('name', name.trim())
+        .maybeSingle()
+
+      let exerciseId
+      if (existing) {
+        exerciseId = existing.id
+      } else {
+        const { data: created, error: createError } = await supabase
+          .from('exercises')
+          .insert({ ...data, user_id: user.id })
+          .select()
+          .single()
+        if (createError) { setError(createError.message); setLoading(false); return }
+        exerciseId = created.id
+      }
+
+      const { error: libError } = await supabase
+        .from('user_exercise_library')
+        .insert({ exercise_id: exerciseId, user_id: user.id })
+      if (libError) { setError(libError.message); setLoading(false); return }
     }
 
-    if (result.error) {
-      setError(result.error.message)
-    } else {
-      clearFormStorage()
-      setFormData(initialFormState)
-      onSuccess?.()
-    }
+    clearFormStorage()
+    setFormData(initialFormState)
+    onSuccess?.()
     setLoading(false)
   }
 
