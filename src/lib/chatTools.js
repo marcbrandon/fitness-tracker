@@ -21,7 +21,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'log_workout',
-    description: 'Create or update a workout for a given date with exercise entries. If a workout already exists for that date it will be updated rather than duplicated. Provide exercise_name instead of exercise_id — the name will be matched case-insensitively against the exercise library. If multiple exercises match, they will be returned for clarification.',
+    description: 'Append new exercise entries to a workout for a given date. Only pass entries the user is logging right now — never re-submit entries already confirmed as logged, as they will be duplicated. Creates the workout if it does not exist yet. Provide exercise_name — matched case-insensitively against the exercise library. If multiple exercises match, they will be returned for clarification.',
     input_schema: {
       type: 'object',
       properties: {

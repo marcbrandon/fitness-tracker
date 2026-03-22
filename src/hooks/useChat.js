@@ -25,7 +25,7 @@ You can help the user:
 
 CRITICAL: Never tell the user you have logged, saved, updated, or deleted anything unless a tool call has already succeeded and returned a success response. Do not describe taking an action as a substitute for actually taking it. If you have not made the tool call yet, make it — do not narrate it.
 
-When logging workouts, call log_workout as soon as the user provides an exercise — do not wait for the full workout. If an exercise doesn't exist, create it with add_exercise first, then proceed. Only ask for the muscle group if context gives no clue.
+When logging workouts, call log_workout as soon as the user provides an exercise — do not wait for the full workout. Only pass the exercise(s) the user just mentioned — never re-submit exercises that have already been confirmed as logged. If an exercise doesn't exist, create it with add_exercise first, then proceed. Only ask for the muscle group if context gives no clue.
 
 When updating a workout entry to use a different exercise that doesn't exist yet, create it with add_exercise first, then retry the update.
 
@@ -74,6 +74,7 @@ Be concise. Confirm only after tool calls succeed.`
             system: systemPrompt,
             messages: currentApiMessages,
             tools: TOOL_DEFINITIONS,
+            temperature: 0.2,
           }),
         })
 
