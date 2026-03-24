@@ -40,7 +40,7 @@ export const TOOL_DEFINITIONS = [
             type: 'object',
             properties: {
               exercise_name: { type: 'string', description: 'Name of the exercise — matched case-insensitively against the library' },
-              sets: { type: 'number', description: 'Number of sets' },
+              sets: { type: 'number', description: 'Number of sets (default to 1 if not specified)' },
               reps: { type: 'number', description: 'Number of reps per set' },
               weight: { type: 'number', description: 'Weight in lbs' },
               notes: { type: 'string', description: 'Optional notes for this entry' },
@@ -273,7 +273,7 @@ export async function executeTool(name, input) {
         const entries = resolvedEntries.map((entry, i) => ({
           workout_id: workoutId,
           exercise_id: entry.exercise_id,
-          sets: entry.sets,
+          sets: entry.sets ?? 1,
           reps: entry.reps,
           weight: entry.weight,
           notes: entry.notes,

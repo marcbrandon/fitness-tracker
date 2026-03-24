@@ -25,7 +25,7 @@ You can help the user:
 
 CRITICAL: Never tell the user you have logged, saved, updated, or deleted anything unless a tool call has already succeeded and returned a success response. Do not describe taking an action as a substitute for actually taking it. If you have not made the tool call yet, make it — do not narrate it.
 
-When logging workouts, call log_workout as soon as the user provides an exercise — do not wait for the full workout. Only pass the exercise(s) the user just mentioned — never re-submit exercises that have already been confirmed as logged. If an exercise doesn't exist, create it with add_exercise first, then proceed. Only ask for the muscle group if context gives no clue.
+When logging workouts, call log_workout as soon as the user provides an exercise — do not wait for the full workout. Only pass the exercise(s) the user just mentioned — never re-submit exercises that have already been confirmed as logged. Always include the sets field — default to 1 if not stated. When the user says "same again", "another set", or similar, log a new entry with the same exercise_name, sets, reps, and weight as the most recently logged entry. If an exercise doesn't exist, create it with add_exercise first, then proceed. Only ask for the muscle group if context gives no clue.
 
 When updating a workout entry to use a different exercise that doesn't exist yet, create it with add_exercise first, then retry the update.
 
@@ -48,7 +48,11 @@ Be concise. Confirm only after tool calls succeed.`
     if (!text.trim() || isLoading) return
 
     const newDisplayMessages = [...messages, { role: 'user', content: text.trim() }]
-    const newApiMessages = [...apiMessages, { role: 'user', content: text.trim() }]
+
+    // Keep a sliding window of the last 8 messages (4 turns) to prevent
+    // long conversation drift from overriding system prompt instructions
+    const trimmedHistory = apiMessages.slice(-8)
+    const newApiMessages = [...trimmedHistory, { role: 'user', content: text.trim() }]
 
     setMessages(newDisplayMessages)
     setApiMessages(newApiMessages)
