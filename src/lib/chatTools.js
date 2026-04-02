@@ -1,5 +1,27 @@
 import { supabase } from '@/lib/supabase'
 
+// Resolve an exercise name to { id, name }.
+// Tries exact match first, falls back to partial, returns error object on ambiguity or no match.
+async function resolveExerciseName(name) {
+  const exact = await supabase
+    .from('exercises')
+    .select('id, name')
+    .ilike('name', name.trim())
+    .maybeSingle()
+
+  if (exact.data) return { exercise: exact.data }
+
+  const { data: partial, error } = await supabase
+    .from('exercises')
+    .select('id, name')
+    .ilike('name', `%${name.trim()}%`)
+
+  if (error) return { error: error.message }
+  if (!partial?.length) return { error: `No exercise found matching "${name}". Use add_exercise to create it, or get_exercises to browse the library.` }
+  if (partial.length > 1) return { error: `Multiple exercises match "${name}" — please clarify.`, matches: partial.map((m) => ({ id: m.id, name: m.name })) }
+  return { exercise: partial[0] }
+}
+
 export const TOOL_DEFINITIONS = [
   {
     name: 'get_recent_workouts',
@@ -212,26 +234,9 @@ export async function executeTool(name, input) {
       // Resolve exercise names to IDs
       const resolvedEntries = []
       for (const entry of input.entries ?? []) {
-        const { data: matches, error: matchError } = await supabase
-          .from('exercises')
-          .select('id, name')
-          .ilike('name', `%${entry.exercise_name}%`)
-
-        if (matchError) return { error: matchError.message }
-
-        if (!matches?.length) {
-          return {
-            error: `No exercise found matching "${entry.exercise_name}". Use add_exercise to create it, or get_exercises to browse the library.`,
-          }
-        }
-        if (matches.length > 1) {
-          return {
-            error: `Multiple exercises match "${entry.exercise_name}" — please clarify which one you mean.`,
-            matches: matches.map((m) => ({ id: m.id, name: m.name })),
-          }
-        }
-
-        resolvedEntries.push({ ...entry, exercise_id: matches[0].id })
+        const result = await resolveExerciseName(entry.exercise_name)
+        if (result.error) return result
+        resolvedEntries.push({ ...entry, exercise_id: result.exercise.id })
       }
 
       // Check for an existing workout on this date to avoid duplicates
@@ -321,26 +326,9 @@ export async function executeTool(name, input) {
       const updates = {}
 
       if (input.exercise_name) {
-        const { data: matches, error: matchError } = await supabase
-          .from('exercises')
-          .select('id, name')
-          .ilike('name', `%${input.exercise_name}%`)
-
-        if (matchError) return { error: matchError.message }
-
-        if (!matches?.length) {
-          return {
-            error: `No exercise found matching "${input.exercise_name}". Use add_exercise to create it, or get_exercises to browse the library.`,
-          }
-        }
-        if (matches.length > 1) {
-          return {
-            error: `Multiple exercises match "${input.exercise_name}" — please clarify which one you mean.`,
-            matches: matches.map((m) => ({ id: m.id, name: m.name })),
-          }
-        }
-
-        updates.exercise_id = matches[0].id
+        const result = await resolveExerciseName(input.exercise_name)
+        if (result.error) return result
+        updates.exercise_id = result.exercise.id
       }
 
       if (input.sets !== undefined) updates.sets = input.sets
@@ -437,7 +425,7 @@ export async function executeTool(name, input) {
         ? [input.muscle_group.charAt(0).toUpperCase() + input.muscle_group.slice(1)]
         : []
 
-      // Reuse existing global exercise if name matches
+      // Reuse existing global exercise if name matches exactly
       const { data: existing } = await supabase
         .from('exercises')
         .select('id, name')
