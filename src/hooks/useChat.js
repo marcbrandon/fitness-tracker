@@ -9,6 +9,7 @@ export function useChat() {
   const [isWorking, setIsWorking] = useState(false)
   const [error, setError] = useState(null)
   const [systemPrompt, setSystemPrompt] = useState(null)
+  const [sessionLog, setSessionLog] = useState([]) // exercises confirmed logged this session
 
   const buildSystemPrompt = useCallback(() => {
     const now = new Date()
@@ -32,6 +33,16 @@ When updating a workout entry to use a different exercise that doesn't exist yet
 Be concise. Confirm only after tool calls succeed.`
   }, [])
 
+  const buildSessionContext = useCallback((log) => {
+    if (!log.length) return null
+    const lines = log.map((e) => {
+      const parts = [`${e.sets}x${e.reps}`]
+      if (e.weight) parts.push(`@ ${e.weight}lbs`)
+      return `- ${e.exercise_name}: ${parts.join(' ')}`
+    })
+    return `Exercises already logged to today's workout — do not re-log these:\n${lines.join('\n')}`
+  }, [])
+
   const initChat = useCallback(() => {
     if (systemPrompt) return // Already initialized
     setSystemPrompt(buildSystemPrompt())
@@ -41,6 +52,7 @@ Be concise. Confirm only after tool calls succeed.`
     setMessages([])
     setApiMessages([])
     setError(null)
+    setSessionLog([])
     setSystemPrompt(buildSystemPrompt())
   }, [buildSystemPrompt])
 
@@ -60,12 +72,22 @@ Be concise. Confirm only after tool calls succeed.`
     setError(null)
 
     let currentApiMessages = newApiMessages
+    let currentSessionLog = sessionLog
 
     try {
       // Tool-use loop
       while (true) {
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
         const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+        // Build system blocks: static (cached) + dynamic session log (uncached)
+        const systemBlocks = [
+          { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },
+        ]
+        const sessionContext = buildSessionContext(currentSessionLog)
+        if (sessionContext) {
+          systemBlocks.push({ type: 'text', text: sessionContext })
+        }
 
         const res = await fetch(`${supabaseUrl}/functions/v1/claude-chat`, {
           method: 'POST',
@@ -75,7 +97,7 @@ Be concise. Confirm only after tool calls succeed.`
             'Authorization': `Bearer ${anonKey}`,
           },
           body: JSON.stringify({
-            system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+            system: systemBlocks,
             messages: currentApiMessages,
             tools: TOOL_DEFINITIONS,
             temperature: 0.2,
@@ -112,14 +134,38 @@ Be concise. Confirm only after tool calls succeed.`
                 type: 'tool_result',
                 tool_use_id: block.id,
                 content: JSON.stringify(result),
+                _block: block, // carry block info for session log update
               }
             })
           )
 
+          // Update session log for successful log_workout calls
+          const newEntries = []
+          for (const tr of toolResults) {
+            const result = JSON.parse(tr.content)
+            if (tr._block.name === 'log_workout' && result.success) {
+              for (const entry of tr._block.input.entries ?? []) {
+                newEntries.push({
+                  exercise_name: entry.exercise_name,
+                  sets: entry.sets ?? 1,
+                  reps: entry.reps,
+                  weight: entry.weight,
+                })
+              }
+            }
+          }
+          if (newEntries.length) {
+            currentSessionLog = [...currentSessionLog, ...newEntries]
+            setSessionLog(currentSessionLog)
+          }
+
+          // Strip internal _block before sending to API
+          const cleanToolResults = toolResults.map(({ _block, ...rest }) => rest)
+
           // Append tool results as user message
           currentApiMessages = [
             ...currentApiMessages,
-            { role: 'user', content: toolResults },
+            { role: 'user', content: cleanToolResults },
           ]
 
           setIsWorking(false)
@@ -153,7 +199,7 @@ Be concise. Confirm only after tool calls succeed.`
       setIsLoading(false)
       setIsWorking(false)
     }
-  }, [messages, apiMessages, isLoading, systemPrompt])
+  }, [messages, apiMessages, isLoading, systemPrompt, sessionLog, buildSessionContext])
 
   return {
     messages,
