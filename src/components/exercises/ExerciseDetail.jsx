@@ -35,8 +35,17 @@ export default function ExerciseDetail() {
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
   const [timeRange, setTimeRange] = useState('all')
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const dotColor = theme === 'dark' ? '#ffffff' : '#000000'
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.type === 'workout' || e.detail?.type === 'exercise') setRefreshKey((k) => k + 1)
+    }
+    window.addEventListener('fitness-data-changed', handler)
+    return () => window.removeEventListener('fitness-data-changed', handler)
+  }, [])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -63,7 +72,7 @@ export default function ExerciseDetail() {
     }
 
     fetchData()
-  }, [id])
+  }, [id, refreshKey])
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '-'

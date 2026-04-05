@@ -30,6 +30,13 @@ export default function Dashboard() {
   const [recentWorkouts, setRecentWorkouts] = useState([])
   const [todayNutrition, setTodayNutrition] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  useEffect(() => {
+    const handler = () => setRefreshKey((k) => k + 1)
+    window.addEventListener('fitness-data-changed', handler)
+    return () => window.removeEventListener('fitness-data-changed', handler)
+  }, [])
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -109,7 +116,7 @@ export default function Dashboard() {
     }
 
     fetchDashboardData()
-  }, [timeRange])
+  }, [timeRange, refreshKey])
 
   const formatDate = (dateStr) => {
     return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
