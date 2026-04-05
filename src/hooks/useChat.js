@@ -75,7 +75,7 @@ Be concise. Confirm only after tool calls succeed.`
             'Authorization': `Bearer ${anonKey}`,
           },
           body: JSON.stringify({
-            system: systemPrompt,
+            system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
             messages: currentApiMessages,
             tools: TOOL_DEFINITIONS,
             temperature: 0.2,

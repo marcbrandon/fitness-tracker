@@ -195,6 +195,7 @@ export const TOOL_DEFINITIONS = [
       },
       required: [],
     },
+    cache_control: { type: 'ephemeral' },
   },
 ]
 
