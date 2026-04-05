@@ -43,7 +43,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'log_workout',
-    description: 'Append new exercise entries to a workout for a given date. Only pass entries the user is logging right now — never re-submit entries already confirmed as logged, as they will be duplicated. Creates the workout if it does not exist yet. Provide exercise_name — matched case-insensitively against the exercise library. If multiple exercises match, they will be returned for clarification.',
+    description: 'Append new exercise entries to a workout for a given date. Each call must contain ONLY the exercise(s) explicitly mentioned in the user\'s most recent message — do not include exercises from earlier in the conversation even if you think they may not have been logged yet. When in doubt, log less. Creates the workout if it does not exist yet. Provide exercise_name — matched case-insensitively against the exercise library. If multiple exercises match, they will be returned for clarification.',
     input_schema: {
       type: 'object',
       properties: {
