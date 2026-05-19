@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 function LoadingDots({ isWorking }) {
   return (
@@ -12,6 +13,21 @@ function LoadingDots({ isWorking }) {
       {isWorking && <span>working...</span>}
     </div>
   )
+}
+
+const markdownComponents = {
+  table: ({ children }) => (
+    <div className="overflow-x-auto my-2">
+      <table className="w-full border-collapse text-xs">{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead>{children}</thead>,
+  th: ({ children }) => (
+    <th className="px-3 py-1.5 text-left font-semibold border-b border-border bg-background/50">{children}</th>
+  ),
+  td: ({ children }) => (
+    <td className="px-3 py-1.5 border-t border-border">{children}</td>
+  ),
 }
 
 export default function ChatMessages({ messages, isLoading, isWorking, error }) {
@@ -45,7 +61,9 @@ export default function ChatMessages({ messages, isLoading, isWorking, error }) 
                 : 'bg-muted text-foreground rounded-bl-sm prose prose-sm prose-neutral dark:prose-invert max-w-none'
             }`}
           >
-            {msg.role === 'user' ? msg.content : <Markdown>{msg.content}</Markdown>}
+            {msg.role === 'user' ? msg.content : (
+              <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{msg.content}</Markdown>
+            )}
           </div>
         </div>
       ))}

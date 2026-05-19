@@ -3,6 +3,9 @@ import { Button } from '@/components/ui/button'
 import ExerciseSelect from './ExerciseSelect'
 
 export default function WorkoutEntry({ entry, onChange, onRemove }) {
+  const type = entry.exercise_type || 'weighted'
+  const isTimed = type === 'timed'
+
   const handleChange = (field, value) => {
     onChange({ ...entry, [field]: value })
   }
@@ -12,7 +15,9 @@ export default function WorkoutEntry({ entry, onChange, onRemove }) {
       <div className="flex-1 min-w-48">
         <ExerciseSelect
           value={entry.exercise_id}
-          onChange={(val) => handleChange('exercise_id', val)}
+          onChange={({ id, type: exerciseType }) =>
+            onChange({ ...entry, exercise_id: id, exercise_type: exerciseType })
+          }
         />
       </div>
       <div className="w-20">
@@ -29,20 +34,22 @@ export default function WorkoutEntry({ entry, onChange, onRemove }) {
           type="number"
           value={entry.reps}
           onChange={(e) => handleChange('reps', e.target.value)}
-          placeholder="Reps"
+          placeholder={isTimed ? 'Secs' : 'Reps'}
           min="1"
         />
       </div>
-      <div className="w-24">
-        <Input
-          type="number"
-          value={entry.weight}
-          onChange={(e) => handleChange('weight', e.target.value)}
-          placeholder="Weight"
-          min="0"
-          step="0.5"
-        />
-      </div>
+      {!isTimed && (
+        <div className="w-24">
+          <Input
+            type="number"
+            value={entry.weight}
+            onChange={(e) => handleChange('weight', e.target.value)}
+            placeholder="Weight"
+            min="0"
+            step="0.5"
+          />
+        </div>
+      )}
       <Button variant="ghost" size="sm" onClick={onRemove} className="text-destructive">
         Remove
       </Button>

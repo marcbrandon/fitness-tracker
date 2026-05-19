@@ -7,7 +7,16 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import WorkoutEntry from './WorkoutEntry'
+
+const ROUTINES = ['Core', 'Legs', 'Push', 'Pull', 'Shoulders']
 
 const createEmptyEntry = () => ({
   id: crypto.randomUUID(),
@@ -19,6 +28,7 @@ const createEmptyEntry = () => ({
 
 const getInitialFormState = () => ({
   date: new Date().toISOString().split('T')[0],
+  routine: '',
   notes: '',
   entries: [createEmptyEntry()],
 })
@@ -29,6 +39,7 @@ export default function WorkoutForm({ existingWorkout, onSuccess, onCancel }) {
   const initialData = existingWorkout
     ? {
         date: existingWorkout.date,
+        routine: existingWorkout.routine || '',
         notes: existingWorkout.notes || '',
         entries: existingWorkout.workout_entries?.length > 0
           ? existingWorkout.workout_entries
@@ -36,6 +47,7 @@ export default function WorkoutForm({ existingWorkout, onSuccess, onCancel }) {
               .map((entry) => ({
                 id: entry.id,
                 exercise_id: entry.exercise_id,
+                exercise_type: entry.exercises?.type || 'weighted',
                 sets: entry.sets?.toString() || '',
                 reps: entry.reps?.toString() || '',
                 weight: entry.weight?.toString() || '',
@@ -45,7 +57,7 @@ export default function WorkoutForm({ existingWorkout, onSuccess, onCancel }) {
     : storedData
 
   const [formData, setFormData] = useState(initialData)
-  const { date, notes, entries } = formData
+  const { date, routine, notes, entries } = formData
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const { user } = useAuth()
@@ -92,6 +104,7 @@ export default function WorkoutForm({ existingWorkout, onSuccess, onCancel }) {
         .from('workouts')
         .update({
           date,
+          routine: routine || null,
           notes: notes || null,
         })
         .eq('id', existingWorkout.id)
@@ -122,6 +135,7 @@ export default function WorkoutForm({ existingWorkout, onSuccess, onCancel }) {
         .insert({
           user_id: user.id,
           date,
+          routine: routine || null,
           notes: notes || null,
         })
         .select()
@@ -174,6 +188,21 @@ export default function WorkoutForm({ existingWorkout, onSuccess, onCancel }) {
               onChange={(e) => updateForm({ date: e.target.value })}
               className="w-auto"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Routine (optional)</Label>
+            <Select value={routine} onValueChange={(val) => updateForm({ routine: val === '__none__' ? '' : val })}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Select routine..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None</SelectItem>
+                {ROUTINES.map((r) => (
+                  <SelectItem key={r} value={r}>{r}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">

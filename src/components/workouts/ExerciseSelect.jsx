@@ -15,7 +15,7 @@ export default function ExerciseSelect({ value, onChange }) {
     const fetchExercises = async () => {
       const { data } = await supabase
         .from('exercises')
-        .select('id, name, muscle_group, user_exercise_library!inner(user_id)')
+        .select('id, name, muscle_group, type, user_exercise_library!inner(user_id)')
         .order('name')
       if (data) setExercises(data)
     }
@@ -23,7 +23,10 @@ export default function ExerciseSelect({ value, onChange }) {
   }, [])
 
   return (
-    <Select value={value} onValueChange={onChange}>
+    <Select value={value} onValueChange={(id) => {
+      const exercise = exercises.find((e) => e.id === id)
+      onChange({ id, type: exercise?.type || 'weighted' })
+    }}>
       <SelectTrigger>
         <SelectValue placeholder="Select exercise" />
       </SelectTrigger>

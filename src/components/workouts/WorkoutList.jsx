@@ -20,14 +20,30 @@ export default function WorkoutList() {
   const [showForm, setShowForm] = useState(false)
   const [editingWorkout, setEditingWorkout] = useState(null)
 
-  const expandedWorkout = searchParams.get('expand')
+  const expandedIds = new Set(
+    searchParams.get('expand')?.split(',').filter(Boolean) ?? []
+  )
   const workoutRefs = useRef({})
 
-  // Scroll to expanded workout after workouts load
+  const toggleExpand = (id) => {
+    const next = new Set(expandedIds)
+    if (next.has(id)) {
+      next.delete(id)
+    } else {
+      next.add(id)
+    }
+    if (next.size === 0) {
+      setSearchParams({})
+    } else {
+      setSearchParams({ expand: [...next].join(',') })
+    }
+  }
+
+  // Scroll to first expanded workout after workouts load
   useEffect(() => {
-    const expandId = searchParams.get('expand')
-    if (expandId && workouts.length > 0 && workoutRefs.current[expandId]) {
-      workoutRefs.current[expandId].scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const firstId = searchParams.get('expand')?.split(',')[0]
+    if (firstId && workouts.length > 0 && workoutRefs.current[firstId]) {
+      workoutRefs.current[firstId].scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }, [workouts, searchParams])
 
@@ -38,7 +54,7 @@ export default function WorkoutList() {
         *,
         workout_entries (
           *,
-          exercises (name, muscle_group)
+          exercises (name, muscle_group, type)
         )
       `)
       .order('date', { ascending: false })
@@ -117,17 +133,18 @@ export default function WorkoutList() {
             <Card key={workout.id} ref={(el) => (workoutRefs.current[workout.id] = el)} className="scroll-mt-5">
               <CardHeader
                 className="cursor-pointer py-4"
-                onClick={() => {
-                  if (expandedWorkout === workout.id) {
-                    setSearchParams({})
-                  } else {
-                    setSearchParams({ expand: workout.id })
-                  }
-                }}
+                onClick={() => toggleExpand(workout.id)}
               >
                 <div className="flex justify-between items-center">
                   <div>
-                    <div className="font-semibold">{formatDate(workout.date)}</div>
+                    <div className="font-semibold">
+                      {formatDate(workout.date)}
+                      {workout.routine && (
+                        <span className="ml-2 text-sm font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                          {workout.routine}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-sm text-muted-foreground">
                       {new Set(workout.workout_entries?.map(e => e.exercise_id)).size || 0} exercises{workout.notes && `, ${workout.notes}`}
                     </div>
@@ -156,13 +173,13 @@ export default function WorkoutList() {
                       Delete
                     </Button>
                     <span className="text-muted-foreground">
-                      {expandedWorkout === workout.id ? '▼' : '▶'}
+                      {expandedIds.has(workout.id) ? '▼' : '▶'}
                     </span>
                   </div>
                 </div>
               </CardHeader>
 
-              {expandedWorkout === workout.id && (
+              {expandedIds.has(workout.id) && (
                 <CardContent className="pt-0">
                   {workout.workout_entries?.length > 0 ? (
                     <Table>
@@ -192,9 +209,17 @@ export default function WorkoutList() {
                                 )}
                               </TableCell>
                               <TableCell>{entry.sets || '-'}</TableCell>
-                              <TableCell>{entry.reps || '-'}</TableCell>
                               <TableCell>
-                                {entry.weight ? `${entry.weight} lbs` : '-'}
+                                {entry.reps
+                                  ? entry.exercises?.type === 'timed'
+                                    ? `${entry.reps}s`
+                                    : entry.reps
+                                  : '-'}
+                              </TableCell>
+                              <TableCell>
+                                {entry.exercises?.type === 'timed'
+                                  ? '-'
+                                  : entry.weight ? `${entry.weight} lbs` : '-'}
                               </TableCell>
                             </TableRow>
                           ))}

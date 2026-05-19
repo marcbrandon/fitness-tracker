@@ -210,7 +210,14 @@ export default function Dashboard() {
                       to={`/workouts?expand=${workout.id}`}
                       className="block hover:bg-muted/50 -mx-2 px-2 py-1 rounded transition-colors"
                     >
-                      <div className="font-medium">{formatDate(workout.date)}</div>
+                      <div className="font-medium">
+                        {formatDate(workout.date)}
+                        {workout.routine && (
+                          <span className="ml-2 text-xs font-normal text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                            {workout.routine}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-sm text-muted-foreground">
                         {new Set(workout.workout_entries?.map(e => e.exercise_id)).size || 0} exercises{workout.notes && `, ${workout.notes}`}
                       </div>

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/hooks/useTheme'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import ExerciseForm from './ExerciseForm'
 import {
   Table,
   TableBody,
@@ -30,12 +31,24 @@ const timeRanges = [
 
 export default function ExerciseDetail() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
   const { theme } = useTheme()
   const [exercise, setExercise] = useState(null)
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
   const [timeRange, setTimeRange] = useState('all')
   const [refreshKey, setRefreshKey] = useState(0)
+  const [editing, setEditing] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const copyName = () => {
+    navigator.clipboard.writeText(exercise.name)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  const backFilter = searchParams.get('back_filter')
+  const backUrl = backFilter ? `/exercises?filter=${backFilter}` : '/exercises'
 
   const dotColor = theme === 'dark' ? '#ffffff' : '#000000'
 
@@ -107,29 +120,46 @@ export default function ExerciseDetail() {
     return entry.workouts?.date >= startDate
   })
 
+  const exerciseType = exercise?.type || 'weighted'
+  const isTimed = exerciseType === 'timed'
+  const isAssisted = exerciseType === 'assisted'
+
   // Calculate stats
-  const pr = filteredEntries.length > 0
-    ? Math.max(...filteredEntries.map((e) => e.weight || 0))
-    : 0
+  const pr = (() => {
+    if (filteredEntries.length === 0) return null
+    if (isTimed) {
+      const max = Math.max(...filteredEntries.map((e) => e.reps || 0))
+      return max > 0 ? max : null
+    }
+    if (isAssisted) {
+      const vals = filteredEntries.map((e) => e.weight).filter((w) => w > 0)
+      return vals.length > 0 ? Math.min(...vals) : null
+    }
+    const max = Math.max(...filteredEntries.map((e) => e.weight || 0))
+    return max > 0 ? max : null
+  })()
 
   const totalSessions = filteredEntries.length
 
-  const totalVolume = filteredEntries.reduce(
-    (sum, e) => sum + (e.sets || 0) * (e.reps || 0) * (e.weight || 0),
-    0
-  )
+  const totalVolume = isTimed
+    ? null
+    : filteredEntries.reduce(
+        (sum, e) => sum + (e.sets || 0) * (e.reps || 0) * (e.weight || 0),
+        0
+      )
 
   const lastPerformed = entries.length > 0
     ? entries[entries.length - 1]?.workouts?.date
     : null
 
   // Chart data - use index to ensure unique keys
+  const chartValue = (entry) => isTimed ? Number(entry.reps) : Number(entry.weight)
   const chartData = filteredEntries
-    .filter((e) => e.weight > 0)
+    .filter((e) => isTimed ? e.reps > 0 : e.weight > 0)
     .map((entry, index) => ({
       index,
       date: formatShortDate(entry.workouts?.date),
-      weight: Number(entry.weight),
+      value: chartValue(entry),
     }))
 
   // Recent sessions (reverse for most recent first)
@@ -143,7 +173,7 @@ export default function ExerciseDetail() {
     return (
       <div>
         <p className="text-muted-foreground mb-4">Exercise not found</p>
-        <Link to="/exercises" className="text-primary hover:underline">
+        <Link to={backUrl} className="text-primary hover:underline">
           Back to exercises
         </Link>
       </div>
@@ -155,25 +185,47 @@ export default function ExerciseDetail() {
       {/* Header */}
       <div className="mb-6">
         <Link
-          to="/exercises"
+          to={backUrl}
           className="text-sm text-muted-foreground hover:text-foreground mb-2 inline-block"
         >
           &larr; Back to exercises
         </Link>
-        <h2 className="text-2xl font-bold">{exercise.name}</h2>
-        {exercise.muscle_group && exercise.muscle_group.length > 0 && (
-          <div className="flex gap-2 mt-2">
-            {exercise.muscle_group.map((group) => (
-              <span
-                key={group}
-                className="text-sm bg-muted px-2 py-1 rounded"
-              >
-                {group}
-              </span>
-            ))}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2
+              className="text-2xl font-bold cursor-pointer select-none"
+              onClick={copyName}
+              title="Tap to copy"
+            >
+              {exercise.name}
+              {copied && <span className="ml-2 text-sm font-normal text-muted-foreground">Copied!</span>}
+            </h2>
+            {exercise.muscle_group && exercise.muscle_group.length > 0 && (
+              <div className="flex gap-2 mt-2">
+                {exercise.muscle_group.map((group) => (
+                  <span key={group} className="text-sm bg-muted px-2 py-1 rounded">
+                    {group}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+            Edit
+          </Button>
+        </div>
       </div>
+
+      {editing && (
+        <ExerciseForm
+          existingExercise={exercise}
+          onSuccess={() => {
+            setEditing(false)
+            setRefreshKey((k) => k + 1)
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      )}
 
       {/* Time Range Selector */}
       <div className="flex gap-2 mb-6">
@@ -194,9 +246,13 @@ export default function ExerciseDetail() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold">
-              {pr > 0 ? `${pr} lbs` : '-'}
+              {pr !== null
+                ? isTimed ? `${pr}s` : `${pr} lbs`
+                : '-'}
             </div>
-            <div className="text-sm text-muted-foreground">Personal Record</div>
+            <div className="text-sm text-muted-foreground">
+              {isTimed ? 'Best Time' : isAssisted ? 'Best (least assist)' : 'Personal Record'}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -208,7 +264,7 @@ export default function ExerciseDetail() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold">
-              {totalVolume > 0 ? totalVolume.toLocaleString() : '-'}
+              {isTimed ? '-' : totalVolume > 0 ? totalVolume.toLocaleString() : '-'}
             </div>
             <div className="text-sm text-muted-foreground">Total Volume (lbs)</div>
           </CardContent>
@@ -227,7 +283,7 @@ export default function ExerciseDetail() {
       {chartData.length > 1 && (
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Weight Progression</CardTitle>
+            <CardTitle>{isTimed ? 'Time Progression' : 'Weight Progression'}</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
@@ -250,11 +306,11 @@ export default function ExerciseDetail() {
                     fontSize: '0.75rem',
                   }}
                   labelFormatter={(index) => chartData[index]?.date || ''}
-                  formatter={(value) => [`${value} lbs`, 'Weight']}
+                  formatter={(value) => [isTimed ? `${value}s` : `${value} lbs`, isTimed ? 'Seconds' : 'Weight']}
                 />
                 <Line
                   type="monotone"
-                  dataKey="weight"
+                  dataKey="value"
                   stroke="hsl(var(--primary))"
                   strokeWidth={2}
                   dot={{ r: 4, fill: dotColor }}
@@ -293,9 +349,9 @@ export default function ExerciseDetail() {
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Sets</TableHead>
-                  <TableHead>Reps</TableHead>
-                  <TableHead>Weight</TableHead>
-                  <TableHead>Volume</TableHead>
+                  <TableHead>{isTimed ? 'Seconds' : 'Reps'}</TableHead>
+                  {!isTimed && <TableHead>Weight</TableHead>}
+                  {!isTimed && <TableHead>Volume</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -303,15 +359,21 @@ export default function ExerciseDetail() {
                   <TableRow key={entry.id}>
                     <TableCell>{formatDate(entry.workouts?.date)}</TableCell>
                     <TableCell>{entry.sets || '-'}</TableCell>
-                    <TableCell>{entry.reps || '-'}</TableCell>
                     <TableCell>
-                      {entry.weight ? `${entry.weight} lbs` : '-'}
+                      {entry.reps ? (isTimed ? `${entry.reps}s` : entry.reps) : '-'}
                     </TableCell>
-                    <TableCell>
-                      {entry.sets && entry.reps && entry.weight
-                        ? (entry.sets * entry.reps * entry.weight).toLocaleString()
-                        : '-'}
-                    </TableCell>
+                    {!isTimed && (
+                      <TableCell>
+                        {entry.weight ? `${entry.weight} lbs` : '-'}
+                      </TableCell>
+                    )}
+                    {!isTimed && (
+                      <TableCell>
+                        {entry.sets && entry.reps && entry.weight
+                          ? (entry.sets * entry.reps * entry.weight).toLocaleString()
+                          : '-'}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -14,11 +14,29 @@ import {
 import ExerciseForm from './ExerciseForm'
 
 export default function ExerciseList() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [exercises, setExercises] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingExercise, setEditingExercise] = useState(null)
-  const [selectedGroup, setSelectedGroup] = useState(null)
+
+  const selectedGroups = new Set(
+    searchParams.get('filter')?.split(',').filter(Boolean) ?? []
+  )
+
+  const toggleGroup = (group) => {
+    const next = new Set(selectedGroups)
+    if (next.has(group)) {
+      next.delete(group)
+    } else {
+      next.add(group)
+    }
+    if (next.size === 0) {
+      setSearchParams({})
+    } else {
+      setSearchParams({ filter: [...next].join(',') })
+    }
+  }
 
   const fetchExercises = async () => {
     const { data, error } = await supabase
@@ -56,8 +74,8 @@ export default function ExerciseList() {
   }
 
   const muscleGroups = [...new Set(exercises.flatMap((e) => e.muscle_group ?? []))].sort()
-  const filtered = selectedGroup
-    ? exercises.filter((e) => e.muscle_group?.includes(selectedGroup))
+  const filtered = selectedGroups.size > 0
+    ? exercises.filter((e) => e.muscle_group?.some((g) => selectedGroups.has(g)))
     : exercises
 
   if (loading) {
@@ -83,9 +101,9 @@ export default function ExerciseList() {
           {muscleGroups.map((group) => (
             <Button
               key={group}
-              variant={selectedGroup === group ? 'default' : 'outline'}
+              variant={selectedGroups.has(group) ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setSelectedGroup(selectedGroup === group ? null : group)}
+              onClick={() => toggleGroup(group)}
             >
               {group}
             </Button>
@@ -128,7 +146,7 @@ export default function ExerciseList() {
                 <TableRow key={exercise.id}>
                   <TableCell className="font-medium">
                     <Link
-                      to={`/exercises/${exercise.id}`}
+                      to={`/exercises/${exercise.id}${selectedGroups.size > 0 ? `?back_filter=${[...selectedGroups].join(',')}` : ''}`}
                       className="hover:text-primary hover:underline"
                     >
                       {exercise.name}

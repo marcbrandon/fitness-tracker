@@ -5,7 +5,7 @@ import ChatButton from '@/components/chat/ChatButton'
 import ChatOverlay from '@/components/chat/ChatOverlay'
 import { useChatContext } from '@/hooks/useChatContext'
 
-const APP_VERSION = 'v0.9.0'
+const APP_VERSION = 'v0.10.0'
 
 export default function Layout({ children }) {
   const { chatOpen, setChatOpen, corner, setCorner, ...chat } = useChatContext()

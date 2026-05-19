@@ -25,7 +25,7 @@ async function resolveExerciseName(name) {
 export const TOOL_DEFINITIONS = [
   {
     name: 'get_recent_workouts',
-    description: 'Retrieve recent workouts with all exercise entries. Use this to check workout history. If the user asks about a specific date, pass that date to avoid fetching unnecessary data.',
+    description: 'Retrieve recent workouts with all exercise entries. Use this to check workout history. If the user asks about a specific date, pass that date. If the user asks about a specific routine (e.g. "last Push workout"), pass the routine to filter efficiently.',
     input_schema: {
       type: 'object',
       properties: {
@@ -36,6 +36,10 @@ export const TOOL_DEFINITIONS = [
         date: {
           type: 'string',
           description: 'Optional specific date in YYYY-MM-DD format. If provided, returns only the workout for that date.',
+        },
+        routine: {
+          type: 'string',
+          description: 'Optional filter by routine name (Core, Legs, Push, Pull, Shoulders). Returns the most recent workouts matching that routine.',
         },
       },
       required: [],
@@ -50,6 +54,10 @@ export const TOOL_DEFINITIONS = [
         date: {
           type: 'string',
           description: 'Date in YYYY-MM-DD format',
+        },
+        routine: {
+          type: 'string',
+          description: 'Optional routine type (Core, Legs, Push, Pull, Shoulders)',
         },
         notes: {
           type: 'string',
@@ -71,17 +79,18 @@ export const TOOL_DEFINITIONS = [
           },
         },
       },
-      required: ['date', 'entries'],
+      required: ['date'],
     },
   },
   {
     name: 'update_workout',
-    description: 'Update an existing workout notes or date.',
+    description: 'Update an existing workout\'s date, routine, or notes.',
     input_schema: {
       type: 'object',
       properties: {
         workout_id: { type: 'string', description: 'UUID of the workout to update' },
         date: { type: 'string', description: 'New date in YYYY-MM-DD format' },
+        routine: { type: 'string', description: 'New routine (Core, Legs, Push, Pull, Shoulders). Pass empty string to clear.' },
         notes: { type: 'string', description: 'New notes for the workout' },
       },
       required: ['workout_id'],
@@ -127,12 +136,13 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'update_exercise',
-    description: 'Update an exercise in the library — rename it or change its muscle group or description.',
+    description: 'Update an exercise in the library — rename it, change its type, muscle group, or description.',
     input_schema: {
       type: 'object',
       properties: {
         exercise_id: { type: 'string', description: 'UUID of the exercise to update' },
         name: { type: 'string', description: 'New name for the exercise' },
+        type: { type: 'string', description: 'New type: "weighted", "timed", or "assisted"' },
         muscle_group: { type: 'string', description: 'New muscle group' },
         description: { type: 'string', description: 'New description' },
       },
@@ -160,10 +170,25 @@ export const TOOL_DEFINITIONS = [
       type: 'object',
       properties: {
         name: { type: 'string', description: 'Name of the exercise' },
+        type: { type: 'string', description: 'Exercise type: "weighted" (sets/reps/weight, default), "timed" (sets/seconds, more is better), or "assisted" (sets/reps/weight, less weight is better)' },
         muscle_group: { type: 'string', description: 'Primary muscle group (e.g., "chest", "back", "legs")' },
         description: { type: 'string', description: 'Optional description of the exercise' },
       },
       required: ['name', 'muscle_group'],
+    },
+  },
+  {
+    name: 'get_exercise_pr',
+    description: 'Get the all-time personal record (heaviest weight) for a specific exercise. Use this when an exercise is mentioned during a workout so you can recognize a new PR if the user beats it.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        exercise_name: {
+          type: 'string',
+          description: 'Name of the exercise — matched case-insensitively',
+        },
+      },
+      required: ['exercise_name'],
     },
   },
   {
@@ -209,7 +234,7 @@ export async function executeTool(name, input) {
       let query = supabase
         .from('workouts')
         .select(`
-          id, date, notes,
+          id, date, routine, notes,
           workout_entries (
             id, sets, reps, weight, notes,
             exercises (name, muscle_group)
@@ -220,6 +245,9 @@ export async function executeTool(name, input) {
       if (input.date) {
         query = query.eq('date', input.date)
       } else {
+        if (input.routine) {
+          query = query.eq('routine', input.routine)
+        }
         query = query.limit(Math.min(input.limit ?? 6, 20))
       }
 
@@ -251,13 +279,16 @@ export async function executeTool(name, input) {
       let workoutId
       if (existing) {
         workoutId = existing.id
-        if (input.notes !== undefined) {
-          await supabase.from('workouts').update({ notes: input.notes }).eq('id', workoutId)
+        const workoutUpdates = {}
+        if (input.notes !== undefined) workoutUpdates.notes = input.notes
+        if (input.routine !== undefined) workoutUpdates.routine = input.routine || null
+        if (Object.keys(workoutUpdates).length > 0) {
+          await supabase.from('workouts').update(workoutUpdates).eq('id', workoutId)
         }
       } else {
         const { data: workout, error: workoutError } = await supabase
           .from('workouts')
-          .insert({ date: input.date, notes: input.notes, user_id: user.id })
+          .insert({ date: input.date, routine: input.routine || null, notes: input.notes, user_id: user.id })
           .select()
           .single()
 
@@ -300,6 +331,7 @@ export async function executeTool(name, input) {
     case 'update_workout': {
       const updates = {}
       if (input.date) updates.date = input.date
+      if (input.routine !== undefined) updates.routine = input.routine || null
       if (input.notes !== undefined) updates.notes = input.notes
 
       const { error } = await supabase
@@ -361,7 +393,7 @@ export async function executeTool(name, input) {
     case 'get_exercises': {
       let query = supabase
         .from('exercises')
-        .select('id, name, muscle_group, description, user_exercise_library!inner(user_id)')
+        .select('id, name, type, muscle_group, description, user_exercise_library!inner(user_id)')
         .order('name')
 
       if (input.muscle_group) {
@@ -379,6 +411,7 @@ export async function executeTool(name, input) {
 
       const updates = {}
       if (input.name !== undefined) updates.name = input.name
+      if (input.type !== undefined) updates.type = input.type
       if (input.muscle_group !== undefined) updates.muscle_group = [input.muscle_group.charAt(0).toUpperCase() + input.muscle_group.slice(1)]
       if (input.description !== undefined) updates.description = input.description
 
@@ -399,6 +432,7 @@ export async function executeTool(name, input) {
           .from('exercises')
           .insert({
             name: updates.name ?? existing.name,
+            type: updates.type ?? existing.type ?? 'weighted',
             muscle_group: updates.muscle_group ?? existing.muscle_group,
             description: updates.description ?? existing.description,
             user_id: user.id,
@@ -439,7 +473,7 @@ export async function executeTool(name, input) {
       } else {
         const { data: created, error: createError } = await supabase
           .from('exercises')
-          .insert({ name: input.name, muscle_group: muscleGroup, description: input.description, user_id: user.id })
+          .insert({ name: input.name, type: input.type || 'weighted', muscle_group: muscleGroup, description: input.description, user_id: user.id })
           .select()
           .single()
         if (createError) return { error: createError.message }
@@ -453,6 +487,55 @@ export async function executeTool(name, input) {
 
       notifyDataChanged('exercise')
       return { success: true, exercise_id: exerciseId, name: existing?.name ?? input.name }
+    }
+
+    case 'get_exercise_pr': {
+      const resolved = await resolveExerciseName(input.exercise_name)
+      if (resolved.error) return resolved
+
+      const { data: ex } = await supabase
+        .from('exercises')
+        .select('type')
+        .eq('id', resolved.exercise.id)
+        .single()
+
+      const type = ex?.type || 'weighted'
+
+      if (type === 'timed') {
+        const { data, error } = await supabase
+          .from('workout_entries')
+          .select('reps, workouts(date)')
+          .eq('exercise_id', resolved.exercise.id)
+          .order('reps', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (error) return { error: error.message }
+        return { exercise: resolved.exercise.name, type, pr_seconds: data?.reps ?? null, pr_date: data?.workouts?.date ?? null }
+      }
+
+      if (type === 'assisted') {
+        const { data, error } = await supabase
+          .from('workout_entries')
+          .select('weight, workouts(date)')
+          .eq('exercise_id', resolved.exercise.id)
+          .gt('weight', 0)
+          .order('weight', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+        if (error) return { error: error.message }
+        return { exercise: resolved.exercise.name, type, pr_weight: data?.weight ?? null, pr_date: data?.workouts?.date ?? null, note: 'Lower weight = less assistance = better' }
+      }
+
+      // weighted
+      const { data, error } = await supabase
+        .from('workout_entries')
+        .select('weight, workouts(date)')
+        .eq('exercise_id', resolved.exercise.id)
+        .order('weight', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (error) return { error: error.message }
+      return { exercise: resolved.exercise.name, type, pr_weight: data?.weight ?? null, pr_date: data?.workouts?.date ?? null }
     }
 
     case 'log_nutrition': {

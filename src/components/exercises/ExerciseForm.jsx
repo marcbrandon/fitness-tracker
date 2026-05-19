@@ -7,6 +7,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
+const EXERCISE_TYPES = [
+  { value: 'weighted', label: 'Weighted' },
+  { value: 'timed', label: 'Timed' },
+  { value: 'assisted', label: 'Assisted' },
+]
+
 const defaultMuscleGroups = [
   'Chest',
   'Back',
@@ -19,17 +25,17 @@ const defaultMuscleGroups = [
   'Full Body',
 ]
 
-const initialFormState = { name: '', muscleGroups: [] }
+const initialFormState = { name: '', type: 'weighted', muscleGroups: [] }
 
 export default function ExerciseForm({ existingExercise, onSuccess, onCancel }) {
   const [storedData, setStoredData, clearFormStorage] = useFormStorage('exercise', initialFormState)
 
   const initialData = existingExercise
-    ? { name: existingExercise.name, muscleGroups: existingExercise.muscle_group || [] }
+    ? { name: existingExercise.name, type: existingExercise.type || 'weighted', muscleGroups: existingExercise.muscle_group || [] }
     : storedData
 
   const [formData, setFormData] = useState(initialData)
-  const { name, muscleGroups: selectedGroups } = formData
+  const { name, type, muscleGroups: selectedGroups } = formData
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [availableMuscleGroups, setAvailableMuscleGroups] = useState(defaultMuscleGroups)
@@ -80,6 +86,7 @@ export default function ExerciseForm({ existingExercise, onSuccess, onCancel }) 
 
     const data = {
       name,
+      type,
       muscle_group: selectedGroups?.length > 0 ? selectedGroups : null,
     }
 
@@ -153,6 +160,25 @@ export default function ExerciseForm({ existingExercise, onSuccess, onCancel }) 
               placeholder="Exercise name"
               required
             />
+          </div>
+          <div>
+            <Label className="mb-2 block">Type</Label>
+            <div className="flex gap-2">
+              {EXERCISE_TYPES.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => updateForm({ type: t.value })}
+                  className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+                    type === t.value
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background text-muted-foreground border-border hover:border-primary'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div>
             <Label className="mb-2 block">Muscle Groups</Label>
