@@ -145,19 +145,25 @@ Be concise. Confirm only after tool calls succeed.`
           const assistantApiMessage = { role: 'assistant', content: response.content }
           currentApiMessages = [...currentApiMessages, assistantApiMessage]
 
-          // Execute all tool_use blocks in parallel
+          // Execute tool_use blocks: run all non-log_workout tools first (in parallel),
+          // then run log_workout tools after. This guarantees DB reads complete before
+          // any writes, preventing get_recent_workouts from racing with log_workout and
+          // returning the just-inserted entry alongside previous-session data.
           const toolUseBlocks = response.content.filter((b) => b.type === 'tool_use')
-          const toolResults = await Promise.all(
-            toolUseBlocks.map(async (block) => {
-              const result = await executeTool(block.name, block.input)
-              return {
-                type: 'tool_result',
-                tool_use_id: block.id,
-                content: JSON.stringify(result),
-                _block: block, // carry block info for session log update
-              }
-            })
-          )
+          const runBlock = async (block) => {
+            const result = await executeTool(block.name, block.input)
+            return {
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: JSON.stringify(result),
+              _block: block,
+            }
+          }
+          const readBlocks = toolUseBlocks.filter((b) => b.name !== 'log_workout')
+          const writeBlocks = toolUseBlocks.filter((b) => b.name === 'log_workout')
+          const readResults = await Promise.all(readBlocks.map(runBlock))
+          const writeResults = await Promise.all(writeBlocks.map(runBlock))
+          const toolResults = [...readResults, ...writeResults]
 
           // Update session log for successful log_workout calls
           const newEntries = []
