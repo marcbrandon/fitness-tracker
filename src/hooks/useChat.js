@@ -46,21 +46,39 @@ When the user mentions an exercise name during a workout session:
 - Call get_exercise_pr for the exercise if you don't already know the PR from earlier in this session.
 - CRITICAL: Never call log_workout in the same response as get_recent_workouts or get_exercise_pr. Always fetch data first, then call log_workout in the next response after you have the results.
 - Before logging the entry, show a one-row table of the last time they did this exercise: Exercise | Sets | Reps | Weight | Volume. Use only workouts from a previous date — never count today's existing entries as "last session."
-- After calling log_workout, append a running volume comparison for that exercise: "Last session: Xlbs total — This session so far: Ylbs total". Compute "this session so far" only from log_workout calls made during this conversation — do not re-query the database.
+- After calling log_workout, append a running volume comparison: "Last session: Xlbs — This session so far: Ylbs". For "this session so far," read the totals directly from the SESSION LOG in the system prompt — do not compute from get_recent_workouts data or from memory. If no session log entry exists for the exercise yet, the total is just the set you just logged.
 - If the logged weight exceeds the all-time PR, congratulate the user on the new record.
-- Volume for multi-set exercises means the sum of (sets × reps × weight) across all entries for that exercise in the session.
+- Volume for a single entry = sets × reps × weight.
+- If the user disputes what's been logged (questions a count, says "that's wrong", etc.), call get_recent_workouts with today's date to get the ground truth before responding. Present that data verbatim — do not infer or adjust.
 
 Be concise. Confirm only after tool calls succeed.`
   }, [])
 
   const buildSessionContext = useCallback((log) => {
     if (!log.length) return null
-    const lines = log.map((e) => {
-      const parts = [`${e.sets}x${e.reps}`]
-      if (e.weight) parts.push(`@ ${e.weight}lbs`)
-      return `- ${e.exercise_name}: ${parts.join(' ')}`
-    })
-    return `Exercises already logged to today's workout — do not re-log these:\n${lines.join('\n')}`
+
+    // Group entries by exercise and pre-compute totals so the model
+    // doesn't need to count or sum — it just reads the numbers.
+    const byExercise = {}
+    for (const e of log) {
+      if (!byExercise[e.exercise_name]) byExercise[e.exercise_name] = []
+      byExercise[e.exercise_name].push(e)
+    }
+
+    const lines = []
+    for (const [name, entries] of Object.entries(byExercise)) {
+      const totalSets = entries.reduce((sum, e) => sum + (e.sets ?? 1), 0)
+      const totalVolume = entries.reduce((sum, e) => sum + (e.sets ?? 1) * (e.reps ?? 0) * (e.weight ?? 0), 0)
+      const entryLines = entries.map((e) => {
+        const parts = [`${e.sets ?? 1}x${e.reps ?? 0}`]
+        if (e.weight) parts.push(`@ ${e.weight}lbs`)
+        return `  • ${parts.join(' ')}`
+      })
+      lines.push(`${name} — ${totalSets} set(s) logged, ${totalVolume} lbs volume this session:`)
+      lines.push(...entryLines)
+    }
+
+    return `SESSION LOG (authoritative — trust this over any other source for "this session so far" counts and volume):\n${lines.join('\n')}\n\nDo NOT re-log any exercise listed above unless the user explicitly reports a new set.`
   }, [])
 
   const initChat = useCallback(() => {
