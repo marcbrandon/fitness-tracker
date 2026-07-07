@@ -1,25 +1,37 @@
 import { supabase } from '@/lib/supabase'
 
-// Resolve an exercise name to { id, name }.
+const ROUTINES = ['Core', 'Legs', 'Push', 'Pull', 'Shoulders']
+
+// Resolve an exercise name to { id, name }, scoped to the user's library so we
+// don't accidentally match another user's exercise with a similar name.
 // Tries exact match first, falls back to partial, returns error object on ambiguity or no match.
 async function resolveExerciseName(name) {
-  const exact = await supabase
+  const trimmed = name.trim()
+  const { data: exact, error: exactError } = await supabase
     .from('exercises')
-    .select('id, name')
-    .ilike('name', name.trim())
-    .maybeSingle()
+    .select('id, name, user_exercise_library!inner(user_id)')
+    .ilike('name', trimmed)
+    .limit(2)
 
-  if (exact.data) return { exercise: exact.data }
+  if (exactError) return { error: exactError.message }
+
+  if (exact?.length === 1) return { exercise: { id: exact[0].id, name: exact[0].name } }
+  if (exact && exact.length > 1) {
+    return {
+      error: `Multiple exercises match "${name}" exactly — please clarify with an ID.`,
+      matches: exact.map((m) => ({ id: m.id, name: m.name })),
+    }
+  }
 
   const { data: partial, error } = await supabase
     .from('exercises')
-    .select('id, name')
-    .ilike('name', `%${name.trim()}%`)
+    .select('id, name, user_exercise_library!inner(user_id)')
+    .ilike('name', `%${trimmed}%`)
 
   if (error) return { error: error.message }
   if (!partial?.length) return { error: `No exercise found matching "${name}". Use add_exercise to create it, or get_exercises to browse the library.` }
   if (partial.length > 1) return { error: `Multiple exercises match "${name}" — please clarify.`, matches: partial.map((m) => ({ id: m.id, name: m.name })) }
-  return { exercise: partial[0] }
+  return { exercise: { id: partial[0].id, name: partial[0].name } }
 }
 
 export const TOOL_DEFINITIONS = [
@@ -39,7 +51,8 @@ export const TOOL_DEFINITIONS = [
         },
         routine: {
           type: 'string',
-          description: 'Optional filter by routine name (Core, Legs, Push, Pull, Shoulders). Returns the most recent workouts matching that routine.',
+          enum: ROUTINES,
+          description: 'Optional filter by routine name. Returns the most recent workouts matching that routine.',
         },
       },
       required: [],
@@ -57,7 +70,8 @@ export const TOOL_DEFINITIONS = [
         },
         routine: {
           type: 'string',
-          description: 'Optional routine type (Core, Legs, Push, Pull, Shoulders)',
+          enum: ROUTINES,
+          description: 'Optional routine type',
         },
         notes: {
           type: 'string',
@@ -90,7 +104,7 @@ export const TOOL_DEFINITIONS = [
       properties: {
         workout_id: { type: 'string', description: 'UUID of the workout to update' },
         date: { type: 'string', description: 'New date in YYYY-MM-DD format' },
-        routine: { type: 'string', description: 'New routine (Core, Legs, Push, Pull, Shoulders). Pass empty string to clear.' },
+        routine: { type: 'string', description: 'New routine. Pass empty string to clear.', enum: [...ROUTINES, ''] },
         notes: { type: 'string', description: 'New notes for the workout' },
       },
       required: ['workout_id'],
@@ -142,7 +156,7 @@ export const TOOL_DEFINITIONS = [
       properties: {
         exercise_id: { type: 'string', description: 'UUID of the exercise to update' },
         name: { type: 'string', description: 'New name for the exercise' },
-        type: { type: 'string', description: 'New type: "weighted", "timed", or "assisted"' },
+        type: { type: 'string', enum: ['weighted', 'bodyweight', 'timed', 'assisted'], description: 'New type' },
         muscle_group: { type: 'string', description: 'New muscle group' },
         description: { type: 'string', description: 'New description' },
       },
@@ -170,7 +184,7 @@ export const TOOL_DEFINITIONS = [
       type: 'object',
       properties: {
         name: { type: 'string', description: 'Name of the exercise' },
-        type: { type: 'string', description: 'Exercise type: "weighted" (sets/reps/weight, default), "timed" (sets/seconds, more is better), or "assisted" (sets/reps/weight, less weight is better)' },
+        type: { type: 'string', enum: ['weighted', 'bodyweight', 'timed', 'assisted'], description: 'Exercise type: "weighted" (sets/reps/weight, default), "bodyweight" (sets/reps, no weight — e.g. pull-ups, push-ups, dips), "timed" (sets/seconds, more is better — e.g. planks), or "assisted" (sets/reps/weight, less weight is better)' },
         muscle_group: { type: 'string', description: 'Primary muscle group (e.g., "chest", "back", "legs")' },
         description: { type: 'string', description: 'Optional description of the exercise' },
       },
@@ -268,7 +282,9 @@ export async function executeTool(name, input) {
         resolvedEntries.push({ ...entry, exercise_id: result.exercise.id })
       }
 
-      // Check for an existing workout on this date to avoid duplicates
+      // Check for an existing workout on this date to avoid duplicates.
+      // Note: the DB should also enforce a UNIQUE(user_id, date) constraint on
+      // workouts to prevent races between concurrent log_workout calls.
       const { data: existing } = await supabase
         .from('workouts')
         .select('id')
@@ -277,6 +293,7 @@ export async function executeTool(name, input) {
         .maybeSingle()
 
       let workoutId
+      const wasCreated = !existing
       if (existing) {
         workoutId = existing.id
         const workoutUpdates = {}
@@ -292,8 +309,24 @@ export async function executeTool(name, input) {
           .select()
           .single()
 
-        if (workoutError) return { error: workoutError.message }
-        workoutId = workout.id
+        if (workoutError) {
+          // Recover from the race: another concurrent call created the workout
+          // between our check and insert. Re-fetch and continue.
+          if (workoutError.code === '23505') {
+            const { data: raced } = await supabase
+              .from('workouts')
+              .select('id')
+              .eq('user_id', user.id)
+              .eq('date', input.date)
+              .maybeSingle()
+            if (!raced) return { error: workoutError.message }
+            workoutId = raced.id
+          } else {
+            return { error: workoutError.message }
+          }
+        } else {
+          workoutId = workout.id
+        }
       }
 
       if (resolvedEntries.length > 0) {
@@ -325,7 +358,13 @@ export async function executeTool(name, input) {
       }
 
       notifyDataChanged('workout')
-      return { success: true, workout_id: workoutId, date: input.date, updated: !!existing }
+      return {
+        success: true,
+        workout_id: workoutId,
+        date: input.date,
+        created: wasCreated,
+        entries_added: resolvedEntries.length,
+      }
     }
 
     case 'update_workout': {
@@ -460,12 +499,15 @@ export async function executeTool(name, input) {
         ? [input.muscle_group.charAt(0).toUpperCase() + input.muscle_group.slice(1)]
         : []
 
-      // Reuse existing global exercise if name matches exactly
-      const { data: existing } = await supabase
+      // Reuse existing global exercise if name matches exactly. Use limit(1) rather
+      // than maybeSingle() so multiple same-name rows (owned by different users)
+      // don't error out.
+      const { data: existingRows } = await supabase
         .from('exercises')
         .select('id, name')
         .ilike('name', input.name.trim())
-        .maybeSingle()
+        .limit(1)
+      const existing = existingRows?.[0]
 
       let exerciseId
       if (existing) {
@@ -483,7 +525,9 @@ export async function executeTool(name, input) {
       const { error: libError } = await supabase
         .from('user_exercise_library')
         .insert({ exercise_id: exerciseId, user_id: user.id })
-      if (libError && !libError.message.includes('duplicate')) return { error: libError.message }
+      // Postgres unique_violation (23505) means the library row already exists —
+      // that's fine, treat it as success.
+      if (libError && libError.code !== '23505') return { error: libError.message }
 
       notifyDataChanged('exercise')
       return { success: true, exercise_id: exerciseId, name: existing?.name ?? input.name }
@@ -501,7 +545,7 @@ export async function executeTool(name, input) {
 
       const type = ex?.type || 'weighted'
 
-      if (type === 'timed') {
+      if (type === 'timed' || type === 'bodyweight') {
         const { data, error } = await supabase
           .from('workout_entries')
           .select('reps, workouts(date)')
@@ -510,15 +554,22 @@ export async function executeTool(name, input) {
           .limit(1)
           .maybeSingle()
         if (error) return { error: error.message }
-        return { exercise: resolved.exercise.name, type, pr_seconds: data?.reps ?? null, pr_date: data?.workouts?.date ?? null }
+        const prField = type === 'timed' ? 'pr_seconds' : 'pr_reps'
+        return {
+          exercise: resolved.exercise.name,
+          type,
+          [prField]: data?.reps ?? null,
+          pr_date: data?.workouts?.date ?? null,
+        }
       }
 
       if (type === 'assisted') {
+        // Lower assistance weight = better PR. 0 = unassisted (best) so include it.
         const { data, error } = await supabase
           .from('workout_entries')
           .select('weight, workouts(date)')
           .eq('exercise_id', resolved.exercise.id)
-          .gt('weight', 0)
+          .not('weight', 'is', null)
           .order('weight', { ascending: true })
           .limit(1)
           .maybeSingle()

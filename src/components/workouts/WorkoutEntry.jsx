@@ -5,6 +5,8 @@ import ExerciseSelect from './ExerciseSelect'
 export default function WorkoutEntry({ entry, onChange, onRemove }) {
   const type = entry.exercise_type || 'weighted'
   const isTimed = type === 'timed'
+  const isBodyweight = type === 'bodyweight'
+  const hasWeight = !isTimed && !isBodyweight
 
   const handleChange = (field, value) => {
     onChange({ ...entry, [field]: value })
@@ -38,7 +40,7 @@ export default function WorkoutEntry({ entry, onChange, onRemove }) {
           min="1"
         />
       </div>
-      {!isTimed && (
+      {hasWeight && (
         <div className="w-24">
           <Input
             type="number"

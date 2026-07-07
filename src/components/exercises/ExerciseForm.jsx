@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 const EXERCISE_TYPES = [
   { value: 'weighted', label: 'Weighted' },
+  { value: 'bodyweight', label: 'Bodyweight' },
   { value: 'timed', label: 'Timed' },
   { value: 'assisted', label: 'Assisted' },
 ]

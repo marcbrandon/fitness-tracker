@@ -122,12 +122,15 @@ export default function ExerciseDetail() {
 
   const exerciseType = exercise?.type || 'weighted'
   const isTimed = exerciseType === 'timed'
+  const isBodyweight = exerciseType === 'bodyweight'
   const isAssisted = exerciseType === 'assisted'
+  const hasWeight = !isTimed && !isBodyweight
+  const yUnit = isTimed ? 's' : isBodyweight ? ' reps' : ' lbs'
 
   // Calculate stats
   const pr = (() => {
     if (filteredEntries.length === 0) return null
-    if (isTimed) {
+    if (isTimed || isBodyweight) {
       const max = Math.max(...filteredEntries.map((e) => e.reps || 0))
       return max > 0 ? max : null
     }
@@ -139,28 +142,74 @@ export default function ExerciseDetail() {
     return max > 0 ? max : null
   })()
 
+  const prLabel = isTimed
+    ? 'Best Time'
+    : isBodyweight
+      ? 'Best Reps'
+      : isAssisted
+        ? 'Best (least assist)'
+        : 'Personal Record'
+
   const totalSessions = filteredEntries.length
 
-  const totalVolume = isTimed
-    ? null
-    : filteredEntries.reduce(
+  const totalVolume = hasWeight
+    ? filteredEntries.reduce(
         (sum, e) => sum + (e.sets || 0) * (e.reps || 0) * (e.weight || 0),
-        0
+        0,
       )
+    : null
 
   const lastPerformed = entries.length > 0
     ? entries[entries.length - 1]?.workouts?.date
     : null
 
   // Chart data - use index to ensure unique keys
-  const chartValue = (entry) => isTimed ? Number(entry.reps) : Number(entry.weight)
+  const chartValue = (entry) => hasWeight ? Number(entry.weight) : Number(entry.reps)
   const chartData = filteredEntries
-    .filter((e) => isTimed ? e.reps > 0 : e.weight > 0)
+    .filter((e) => hasWeight ? e.weight > 0 : e.reps > 0)
     .map((entry, index) => ({
       index,
       date: formatShortDate(entry.workouts?.date),
       value: chartValue(entry),
+      reps: entry.reps,
+      sets: entry.sets,
     }))
+
+  // Encode rep count as dot opacity: fewer reps = more transparent (more gray).
+  // 6+ reps hits full brightness. Only applies to weighted/assisted — for
+  // timed/bodyweight, the y-axis IS reps (or seconds), so the encoding would be
+  // redundant.
+  const repOpacity = (reps) => {
+    if (!reps || reps < 1) return 1
+    const clamped = Math.min(reps, 6)
+    return 0.3 + ((clamped - 1) / 5) * 0.7
+  }
+
+  const RepDot = (props) => {
+    const { cx, cy, payload } = props
+    if (cx == null || cy == null) return null
+    const opacity = hasWeight ? repOpacity(payload?.reps) : 1
+    return (
+      <circle cx={cx} cy={cy} r={4} fill={dotColor} opacity={opacity} />
+    )
+  }
+
+  const RepActiveDot = (props) => {
+    const { cx, cy, payload } = props
+    if (cx == null || cy == null) return null
+    const opacity = hasWeight ? repOpacity(payload?.reps) : 1
+    return (
+      <circle cx={cx} cy={cy} r={6} fill={dotColor} opacity={opacity} />
+    )
+  }
+
+  const chartTitle = isTimed
+    ? 'Time Progression'
+    : isBodyweight
+      ? 'Reps Progression'
+      : 'Weight Progression'
+  const yLabel = isTimed ? 'Seconds' : isBodyweight ? 'Reps' : 'Weight'
+  const repsColumnLabel = isTimed ? 'Seconds' : 'Reps'
 
   // Recent sessions (reverse for most recent first)
   const recentSessions = [...filteredEntries].reverse()
@@ -246,13 +295,9 @@ export default function ExerciseDetail() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold">
-              {pr !== null
-                ? isTimed ? `${pr}s` : `${pr} lbs`
-                : '-'}
+              {pr !== null ? `${pr}${yUnit}` : '-'}
             </div>
-            <div className="text-sm text-muted-foreground">
-              {isTimed ? 'Best Time' : isAssisted ? 'Best (least assist)' : 'Personal Record'}
-            </div>
+            <div className="text-sm text-muted-foreground">{prLabel}</div>
           </CardContent>
         </Card>
         <Card>
@@ -264,7 +309,7 @@ export default function ExerciseDetail() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold">
-              {isTimed ? '-' : totalVolume > 0 ? totalVolume.toLocaleString() : '-'}
+              {hasWeight && totalVolume > 0 ? totalVolume.toLocaleString() : '-'}
             </div>
             <div className="text-sm text-muted-foreground">Total Volume (lbs)</div>
           </CardContent>
@@ -283,7 +328,24 @@ export default function ExerciseDetail() {
       {chartData.length > 1 && (
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>{isTimed ? 'Time Progression' : 'Weight Progression'}</CardTitle>
+            <CardTitle>{chartTitle}</CardTitle>
+            {hasWeight && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                <span>Reps:</span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: dotColor, opacity: 0.3 }} />
+                  <span>1</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: dotColor, opacity: 0.65 }} />
+                  <span>3</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: dotColor, opacity: 1 }} />
+                  <span>6+</span>
+                </span>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
@@ -305,16 +367,24 @@ export default function ExerciseDetail() {
                     borderRadius: '0.5rem',
                     fontSize: '0.75rem',
                   }}
-                  labelFormatter={(index) => chartData[index]?.date || ''}
-                  formatter={(value) => [isTimed ? `${value}s` : `${value} lbs`, isTimed ? 'Seconds' : 'Weight']}
+                  labelFormatter={(index) => {
+                    const d = chartData[index]
+                    if (!d) return ''
+                    if (!hasWeight) return d.date
+                    const parts = [d.date]
+                    if (d.sets && d.reps) parts.push(`${d.sets}×${d.reps}`)
+                    else if (d.reps) parts.push(`${d.reps} reps`)
+                    return parts.join(' — ')
+                  }}
+                  formatter={(value) => [`${value}${yUnit}`, yLabel]}
                 />
                 <Line
                   type="monotone"
                   dataKey="value"
                   stroke="hsl(var(--primary))"
                   strokeWidth={2}
-                  dot={{ r: 4, fill: dotColor }}
-                  activeDot={{ r: 6, fill: dotColor }}
+                  dot={<RepDot />}
+                  activeDot={<RepActiveDot />}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -325,7 +395,7 @@ export default function ExerciseDetail() {
       {chartData.length === 1 && (
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Weight Progression</CardTitle>
+            <CardTitle>{chartTitle}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">
@@ -349,9 +419,9 @@ export default function ExerciseDetail() {
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Sets</TableHead>
-                  <TableHead>{isTimed ? 'Seconds' : 'Reps'}</TableHead>
-                  {!isTimed && <TableHead>Weight</TableHead>}
-                  {!isTimed && <TableHead>Volume</TableHead>}
+                  <TableHead>{repsColumnLabel}</TableHead>
+                  {hasWeight && <TableHead>Weight</TableHead>}
+                  {hasWeight && <TableHead>Volume</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -362,12 +432,12 @@ export default function ExerciseDetail() {
                     <TableCell>
                       {entry.reps ? (isTimed ? `${entry.reps}s` : entry.reps) : '-'}
                     </TableCell>
-                    {!isTimed && (
+                    {hasWeight && (
                       <TableCell>
                         {entry.weight ? `${entry.weight} lbs` : '-'}
                       </TableCell>
                     )}
-                    {!isTimed && (
+                    {hasWeight && (
                       <TableCell>
                         {entry.sets && entry.reps && entry.weight
                           ? (entry.sets * entry.reps * entry.weight).toLocaleString()

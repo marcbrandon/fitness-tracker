@@ -1,6 +1,10 @@
 import { useState, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
 import { TOOL_DEFINITIONS, executeTool } from '@/lib/chatTools'
+
+const MAX_TOOL_ITERATIONS = 10
+const MAX_HISTORY_MESSAGES = 8
+
+const todayLocal = () => new Date().toLocaleDateString('en-CA')
 
 export function useChat() {
   const [messages, setMessages] = useState([]) // display format: { role, content: string }
@@ -10,10 +14,10 @@ export function useChat() {
   const [error, setError] = useState(null)
   const [systemPrompt, setSystemPrompt] = useState(null)
   const [sessionLog, setSessionLog] = useState([]) // exercises confirmed logged this session
+  const [sessionDate, setSessionDate] = useState(() => todayLocal())
 
   const buildSystemPrompt = useCallback(() => {
-    const now = new Date()
-    const today = now.toLocaleDateString('en-CA') // YYYY-MM-DD in local time
+    const today = todayLocal()
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
     return `You are a personal fitness assistant with read and write access to the user's fitness data. Today's date is ${today} (${timezone}).
@@ -26,9 +30,10 @@ You can help the user:
 
 CRITICAL: Never tell the user you have logged, saved, updated, or deleted anything unless a tool call has already succeeded and returned a success response. Do not describe taking an action as a substitute for actually taking it. If you have not made the tool call yet, make it — do not narrate it.
 
-Exercises have three types — always respect the type when logging and comparing:
+Exercises have four types — always respect the type when logging and comparing:
 - weighted: sets/reps/weight. Higher weight = better PR.
-- timed: sets/seconds (stored in the reps field). More seconds = better PR. Do not log weight.
+- bodyweight: sets/reps (no weight — e.g. pull-ups, push-ups, dips). Higher reps = better PR. Do not log weight.
+- timed: sets/seconds (stored in the reps field — e.g. planks). More seconds = better PR. Do not log weight.
 - assisted: sets/reps/weight (machine-assisted). Lower weight = less assistance = better PR.
 
 When logging workouts, call log_workout as soon as the user provides an exercise — do not wait for the full workout. Each log_workout call must contain only the exercise(s) from the user's current message — never include exercises from earlier in the conversation. Always include the sets field — default to 1 if not stated. When the user says "same again", "another set", or similar, log a new entry with the same exercise_name, sets, reps, and weight as the most recently logged entry. If an exercise doesn't exist, create it with add_exercise first, then proceed. Only ask for the muscle group if context gives no clue.
@@ -91,30 +96,39 @@ Be concise. Confirm only after tool calls succeed.`
     setApiMessages([])
     setError(null)
     setSessionLog([])
+    setSessionDate(todayLocal())
     setSystemPrompt(buildSystemPrompt())
   }, [buildSystemPrompt])
 
   const sendMessage = useCallback(async (text) => {
     if (!text.trim() || isLoading) return
 
-    const newDisplayMessages = [...messages, { role: 'user', content: text.trim() }]
+    // Reset session log if the day has rolled over — "this session" is same-day.
+    const today = todayLocal()
+    let workingSessionLog = sessionLog
+    if (today !== sessionDate) {
+      workingSessionLog = []
+      setSessionLog([])
+      setSessionDate(today)
+    }
 
-    // Keep a sliding window of the last 8 messages (4 turns) to prevent
-    // long conversation drift from overriding system prompt instructions
-    const trimmedHistory = apiMessages.slice(-8)
-    const newApiMessages = [...trimmedHistory, { role: 'user', content: text.trim() }]
-
-    setMessages(newDisplayMessages)
-    setApiMessages(newApiMessages)
+    setMessages((prev) => [...prev, { role: 'user', content: text.trim() }])
     setIsLoading(true)
     setError(null)
 
-    let currentApiMessages = newApiMessages
-    let currentSessionLog = sessionLog
+    // Sliding window over persisted history keeps the request bounded.
+    const trimmedHistory = apiMessages.slice(-MAX_HISTORY_MESSAGES)
+    let currentApiMessages = [...trimmedHistory, { role: 'user', content: text.trim() }]
+    let currentSessionLog = workingSessionLog
+    let assistantText = null
+    let iterations = 0
 
     try {
-      // Tool-use loop
       while (true) {
+        if (iterations++ >= MAX_TOOL_ITERATIONS) {
+          throw new Error(`Reached maximum tool iterations (${MAX_TOOL_ITERATIONS}). The assistant may be stuck in a loop — try rephrasing.`)
+        }
+
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
         const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
@@ -143,8 +157,8 @@ Be concise. Confirm only after tool calls succeed.`
         })
 
         if (!res.ok) {
-          const text = await res.text()
-          throw new Error(`Function error ${res.status}: ${text}`)
+          const errText = await res.text()
+          throw new Error(`Function error ${res.status}: ${errText}`)
         }
 
         const data = await res.json()
@@ -152,14 +166,12 @@ Be concise. Confirm only after tool calls succeed.`
         if (data.anthropic_status && data.anthropic_status !== 200) {
           throw new Error(`Anthropic error ${data.anthropic_status}: ${data.error?.message ?? JSON.stringify(data)}`)
         }
-        if (data.error && !data.type) throw new Error(data.error)
 
         const response = data
 
         if (response.stop_reason === 'tool_use') {
           setIsWorking(true)
 
-          // Build assistant message with all content blocks
           const assistantApiMessage = { role: 'assistant', content: response.content }
           currentApiMessages = [...currentApiMessages, assistantApiMessage]
 
@@ -183,7 +195,6 @@ Be concise. Confirm only after tool calls succeed.`
           const writeResults = await Promise.all(writeBlocks.map(runBlock))
           const toolResults = [...readResults, ...writeResults]
 
-          // Update session log for successful log_workout calls
           const newEntries = []
           for (const tr of toolResults) {
             const result = JSON.parse(tr.content)
@@ -203,47 +214,48 @@ Be concise. Confirm only after tool calls succeed.`
             setSessionLog(currentSessionLog)
           }
 
-          // Strip internal _block before sending to API
-          const cleanToolResults = toolResults.map(({ _block, ...rest }) => rest)
+          const cleanToolResults = toolResults.map((tr) => ({
+            type: tr.type,
+            tool_use_id: tr.tool_use_id,
+            content: tr.content,
+          }))
 
-          // Append tool results as user message
           currentApiMessages = [
             ...currentApiMessages,
             { role: 'user', content: cleanToolResults },
           ]
 
           setIsWorking(false)
-          // Continue loop for next response
         } else if (response.stop_reason === 'end_turn') {
-          // Extract text block and add to display messages
-          const textBlock = response.content.find((b) => b.type === 'text')
-          const assistantText = textBlock?.text ?? ''
-
-          setMessages((prev) => [...prev, { role: 'assistant', content: assistantText }])
-          // Compress: discard intermediate tool use/result pairs — only persist the
-          // user's text message and the assistant's final text reply to keep history lean.
-          setApiMessages([
-            ...apiMessages,
-            { role: 'user', content: text.trim() },
-            { role: 'assistant', content: assistantText },
-          ])
+          assistantText = (response.content ?? [])
+            .filter((b) => b.type === 'text')
+            .map((b) => b.text)
+            .join('\n\n')
+            .trim()
           break
         } else {
-          // Unexpected stop reason — still try to extract text
-          const textBlock = response.content?.find((b) => b.type === 'text')
-          if (textBlock) {
-            setMessages((prev) => [...prev, { role: 'assistant', content: textBlock.text }])
-          }
-          break
+          // max_tokens, pause_turn, refusal, or anything else — treat as failure so
+          // apiMessages isn't left in an inconsistent state (dangling user message
+          // with no assistant reply).
+          throw new Error(`Assistant stopped unexpectedly (${response.stop_reason ?? 'unknown reason'}). Try again.`)
         }
       }
+
+      // Success path: commit both display and API history.
+      setMessages((prev) => [...prev, { role: 'assistant', content: assistantText }])
+      setApiMessages((prev) => [
+        ...prev,
+        { role: 'user', content: text.trim() },
+        { role: 'assistant', content: assistantText },
+      ].slice(-MAX_HISTORY_MESSAGES))
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.')
+      // Do NOT touch apiMessages — the previous turn's state is still valid.
     } finally {
       setIsLoading(false)
       setIsWorking(false)
     }
-  }, [messages, apiMessages, isLoading, systemPrompt, sessionLog, buildSessionContext])
+  }, [apiMessages, isLoading, systemPrompt, sessionLog, sessionDate, buildSessionContext])
 
   return {
     messages,

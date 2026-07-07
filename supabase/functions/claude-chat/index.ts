@@ -15,14 +15,13 @@ Deno.serve(async (req) => {
     // Parse the request body (Anthropic Messages API format)
     const body = await req.json()
 
-    // Proxy to Anthropic API
+    // Proxy to Anthropic API. Prompt caching is GA on 2023-06-01 — no beta header needed.
     const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': anthropicApiKey,
         'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'prompt-caching-2024-07-31',
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',

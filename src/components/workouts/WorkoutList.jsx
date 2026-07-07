@@ -217,7 +217,7 @@ export default function WorkoutList() {
                                   : '-'}
                               </TableCell>
                               <TableCell>
-                                {entry.exercises?.type === 'timed'
+                                {entry.exercises?.type === 'timed' || entry.exercises?.type === 'bodyweight'
                                   ? '-'
                                   : entry.weight ? `${entry.weight} lbs` : '-'}
                               </TableCell>
