@@ -17,10 +17,13 @@ export default function Navigation() {
   const moreButtonRef = useRef(null)
   const location = useLocation()
 
-  // Close menu on route change
-  useEffect(() => {
+  // Close the menu on route change by adjusting state during render when the
+  // path changes — React's recommended alternative to a reset-on-change effect.
+  const [lastPath, setLastPath] = useState(location.pathname)
+  if (lastPath !== location.pathname) {
+    setLastPath(location.pathname)
     setMenuOpen(false)
-  }, [location])
+  }
 
   // Calculate how many items fit
   useEffect(() => {

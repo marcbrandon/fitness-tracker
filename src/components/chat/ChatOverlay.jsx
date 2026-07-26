@@ -50,7 +50,7 @@ export default function ChatOverlay({ isOpen, onClose, chat, corner }) {
       {/* Overlay panel — mobile: bottom sheet; desktop: floats near FAB */}
       <div
         className="fixed z-50 flex flex-col bg-background border shadow-xl bottom-0 left-0 right-0 h-[70vh] rounded-t-2xl sm:left-[var(--chat-left)] sm:right-[var(--chat-right)] sm:top-[var(--chat-top)] sm:bottom-[var(--chat-bottom)] sm:w-96 sm:h-[500px] sm:rounded-2xl"
-        style={cornerStyle(corner)}
+        style={{ ...cornerStyle(corner), paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">

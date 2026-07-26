@@ -51,7 +51,17 @@ export default function ExerciseList() {
   }
 
   useEffect(() => {
-    fetchExercises()
+    let cancelled = false
+    supabase
+      .from('exercises')
+      .select('*, workout_entries(count), user_exercise_library!inner(user_id)')
+      .order('name')
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (!error) setExercises(data)
+        setLoading(false)
+      })
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {

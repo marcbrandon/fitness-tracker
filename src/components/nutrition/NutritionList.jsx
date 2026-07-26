@@ -31,7 +31,17 @@ export default function NutritionList() {
   }
 
   useEffect(() => {
-    fetchLogs()
+    let cancelled = false
+    supabase
+      .from('nutrition_logs')
+      .select('*')
+      .order('date', { ascending: false })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (!error) setLogs(data)
+        setLoading(false)
+      })
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {

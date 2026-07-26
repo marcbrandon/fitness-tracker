@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
@@ -9,10 +9,13 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const location = useLocation()
 
-  // Close menu on route change
-  useEffect(() => {
+  // Close the menu on route change by adjusting state during render when the
+  // path changes — React's recommended alternative to a reset-on-change effect.
+  const [lastPath, setLastPath] = useState(location.pathname)
+  if (lastPath !== location.pathname) {
+    setLastPath(location.pathname)
     setMenuOpen(false)
-  }, [location])
+  }
 
   const handleSignOut = async () => {
     setMenuOpen(false)

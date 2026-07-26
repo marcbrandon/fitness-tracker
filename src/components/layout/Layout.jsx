@@ -25,7 +25,10 @@ export default function Layout({ children }) {
         {children}
       </main>
       <footer className="border-t bg-background">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
+        <div
+          className="max-w-6xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground"
+          style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+        >
           <div className="flex items-center gap-4">
             <span>{today}</span>
             <span>{APP_VERSION}</span>

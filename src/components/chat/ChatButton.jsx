@@ -3,14 +3,17 @@ import { useLocation } from 'react-router-dom'
 import { MessageCircle, X } from 'lucide-react'
 
 const SNAP_OFFSET = 24
+const EDGE = `${SNAP_OFFSET}px`
+// Keep the FAB clear of the iOS home indicator when running standalone.
+const BOTTOM_EDGE = `calc(${SNAP_OFFSET}px + env(safe-area-inset-bottom))`
 
 const cornerStyle = (corner) => {
   switch (corner) {
-    case 'top-left':     return { top: SNAP_OFFSET, left: SNAP_OFFSET }
-    case 'top-right':    return { top: SNAP_OFFSET, right: SNAP_OFFSET }
-    case 'bottom-left':  return { bottom: SNAP_OFFSET, left: SNAP_OFFSET }
+    case 'top-left':     return { top: EDGE, left: EDGE }
+    case 'top-right':    return { top: EDGE, right: EDGE }
+    case 'bottom-left':  return { bottom: BOTTOM_EDGE, left: EDGE }
     case 'bottom-right':
-    default:             return { bottom: SNAP_OFFSET, right: SNAP_OFFSET }
+    default:             return { bottom: BOTTOM_EDGE, right: EDGE }
   }
 }
 

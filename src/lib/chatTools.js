@@ -2,6 +2,10 @@ import { supabase } from '@/lib/supabase'
 
 const ROUTINES = ['Core', 'Legs', 'Push', 'Pull', 'Shoulders']
 
+// Local calendar date (YYYY-MM-DD) — matches useChat's notion of "today" so the
+// tools agree on what counts as a previous session.
+const todayLocal = () => new Date().toLocaleDateString('en-CA')
+
 // Resolve an exercise name to { id, name }, scoped to the user's library so we
 // don't accidentally match another user's exercise with a similar name.
 // Tries exact match first, falls back to partial, returns error object on ambiguity or no match.
@@ -200,6 +204,24 @@ export const TOOL_DEFINITIONS = [
         exercise_name: {
           type: 'string',
           description: 'Name of the exercise — matched case-insensitively',
+        },
+      },
+      required: ['exercise_name'],
+    },
+  },
+  {
+    name: 'get_last_exercise_session',
+    description: 'Find the most recent PREVIOUS session in which the user performed a specific exercise, no matter how many sessions ago it was. Use this to show "the last time you did X" before logging a new set — an exercise is often trained only every few sessions, so it may be absent from the most recent workout. Returns the date and every set of that exercise from that session, with pre-computed total sets and volume. Never report "N/A" or "no history" for an exercise without calling this first; only treat it as having no history if last_session is null.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        exercise_name: {
+          type: 'string',
+          description: 'Name of the exercise — matched case-insensitively',
+        },
+        before_date: {
+          type: 'string',
+          description: 'Optional YYYY-MM-DD cutoff — returns the last session strictly before this date. Defaults to today, so today\'s entries are excluded.',
         },
       },
       required: ['exercise_name'],
@@ -587,6 +609,46 @@ export async function executeTool(name, input) {
         .maybeSingle()
       if (error) return { error: error.message }
       return { exercise: resolved.exercise.name, type, pr_weight: data?.weight ?? null, pr_date: data?.workouts?.date ?? null }
+    }
+
+    case 'get_last_exercise_session': {
+      const resolved = await resolveExerciseName(input.exercise_name)
+      if (resolved.error) return resolved
+
+      const { data: ex } = await supabase
+        .from('exercises')
+        .select('type')
+        .eq('id', resolved.exercise.id)
+        .single()
+      const type = ex?.type || 'weighted'
+
+      const before = input.before_date || todayLocal()
+
+      // Fetch every prior entry for this exercise, then pick the ones from the
+      // most recent date. The client can't order parent rows by an embedded
+      // column, so we find the max date in JS — per-exercise history is small.
+      const { data, error } = await supabase
+        .from('workout_entries')
+        .select('sets, reps, weight, workouts!inner(date)')
+        .eq('exercise_id', resolved.exercise.id)
+        .lt('workouts.date', before)
+
+      if (error) return { error: error.message }
+      if (!data?.length) return { exercise: resolved.exercise.name, type, last_session: null }
+
+      const maxDate = data.reduce((m, e) => (e.workouts.date > m ? e.workouts.date : m), data[0].workouts.date)
+      const sets = data
+        .filter((e) => e.workouts.date === maxDate)
+        .map((e) => ({ sets: e.sets ?? 1, reps: e.reps, weight: e.weight }))
+
+      const totalSets = sets.reduce((s, e) => s + (e.sets ?? 1), 0)
+      const totalVolume = sets.reduce((s, e) => s + (e.sets ?? 1) * (e.reps ?? 0) * (e.weight ?? 0), 0)
+
+      return {
+        exercise: resolved.exercise.name,
+        type,
+        last_session: { date: maxDate, sets, total_sets: totalSets, total_volume: totalVolume },
+      }
     }
 
     case 'log_nutrition': {

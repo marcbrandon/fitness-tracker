@@ -1,9 +1,12 @@
-import { useState, useRef, useEffect } from 'react'
+import { useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { SendHorizontal } from 'lucide-react'
+import { useFormStorage } from '@/hooks/useFormStorage'
 
 export default function ChatInput({ onSend, isLoading }) {
-  const [text, setText] = useState('')
+  // Persist the draft so a reload (e.g. iOS reloading the home-screen app after
+  // backgrounding) keeps whatever the user was typing.
+  const [text, setText] = useFormStorage('chat-draft', '')
   const textareaRef = useRef(null)
 
   // Auto-resize textarea

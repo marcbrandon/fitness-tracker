@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { TOOL_DEFINITIONS, executeTool } from '@/lib/chatTools'
 
 const MAX_TOOL_ITERATIONS = 10
@@ -6,15 +6,47 @@ const MAX_HISTORY_MESSAGES = 8
 
 const todayLocal = () => new Date().toLocaleDateString('en-CA')
 
+// The chat conversation is persisted to localStorage so an iOS home-screen
+// launch that cold-reloads the page (iOS evicts backgrounded web views from
+// memory) can resume the conversation instead of starting over.
+const CHAT_STORAGE_KEY = 'fitness-chat-session'
+
+function loadChatSnapshot() {
+  try {
+    const raw = localStorage.getItem(CHAT_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
 export function useChat() {
-  const [messages, setMessages] = useState([]) // display format: { role, content: string }
-  const [apiMessages, setApiMessages] = useState([]) // Anthropic API format
+  const [restored] = useState(loadChatSnapshot) // one-time read of persisted session
+  const [messages, setMessages] = useState(() => restored?.messages ?? []) // display format: { role, content: string }
+  const [apiMessages, setApiMessages] = useState(() => restored?.apiMessages ?? []) // Anthropic API format
   const [isLoading, setIsLoading] = useState(false)
   const [isWorking, setIsWorking] = useState(false)
   const [error, setError] = useState(null)
   const [systemPrompt, setSystemPrompt] = useState(null)
-  const [sessionLog, setSessionLog] = useState([]) // exercises confirmed logged this session
-  const [sessionDate, setSessionDate] = useState(() => todayLocal())
+  const [sessionLog, setSessionLog] = useState(() => restored?.sessionLog ?? []) // exercises confirmed logged this session
+  const [sessionDate, setSessionDate] = useState(() => restored?.sessionDate ?? todayLocal())
+
+  // Persist the conversation whenever it changes (and clear storage once the
+  // conversation is emptied, e.g. via clearChat) so a reload resumes cleanly.
+  useEffect(() => {
+    try {
+      if (!messages.length && !apiMessages.length && !sessionLog.length) {
+        localStorage.removeItem(CHAT_STORAGE_KEY)
+      } else {
+        localStorage.setItem(
+          CHAT_STORAGE_KEY,
+          JSON.stringify({ messages, apiMessages, sessionLog, sessionDate })
+        )
+      }
+    } catch {
+      // storage full/unavailable — non-fatal, chat still works in-memory
+    }
+  }, [messages, apiMessages, sessionLog, sessionDate])
 
   const buildSystemPrompt = useCallback(() => {
     const today = todayLocal()
@@ -46,11 +78,12 @@ When the user indicates they are starting a workout by naming a routine (e.g. "P
 3. Reply with a confirmation that today's workout has been created, then a table showing the exercises from the previous session (Exercise | Sets | Reps | Weight | Volume), where Volume = sets × reps × weight.
 
 When the user mentions an exercise name during a workout session:
-- If you already fetched the previous session (e.g. from the routine start), look up that exercise in the data you already have — do not fetch again.
-- If you do not have recent history for this exercise, call get_recent_workouts with the current routine filter (or no filter if no routine is set) before logging.
+- Establish the last time they did THIS exercise on any previous date — not necessarily the most recent session. An exercise is often trained only every few sessions, so it is frequently absent from the most recent workout.
+  - If that exercise already appears in previous-session data you fetched this session, use that data — do not fetch again.
+  - Otherwise call get_last_exercise_session for it. NEVER report "N/A" or "no previous data" for an exercise just because it was missing from the most recent session — call get_last_exercise_session first, and only treat it as having no history if it returns last_session: null.
 - Call get_exercise_pr for the exercise if you don't already know the PR from earlier in this session.
-- CRITICAL: Never call log_workout in the same response as get_recent_workouts or get_exercise_pr. Always fetch data first, then call log_workout in the next response after you have the results.
-- Before logging the entry, show a one-row table of the last time they did this exercise: Exercise | Sets | Reps | Weight | Volume. Use only workouts from a previous date — never count today's existing entries as "last session."
+- CRITICAL: Never call log_workout in the same response as get_last_exercise_session, get_recent_workouts, or get_exercise_pr. Always fetch data first, then call log_workout in the next response after you have the results.
+- Before logging the entry, show a one-row table of that last session: Exercise | Sets | Reps | Weight | Volume. Use only workouts from a previous date — never count today's existing entries as "last session."
 - After calling log_workout, append a running volume comparison: "Last session: Xlbs — This session so far: Ylbs". For "this session so far," read the totals directly from the SESSION LOG in the system prompt — do not compute from get_recent_workouts data or from memory. If no session log entry exists for the exercise yet, the total is just the set you just logged.
 - If the logged weight exceeds the all-time PR, congratulate the user on the new record.
 - Volume for a single entry = sets × reps × weight.

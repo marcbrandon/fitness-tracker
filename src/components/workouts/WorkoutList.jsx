@@ -66,7 +66,23 @@ export default function WorkoutList() {
   }
 
   useEffect(() => {
-    fetchWorkouts()
+    let cancelled = false
+    supabase
+      .from('workouts')
+      .select(`
+        *,
+        workout_entries (
+          *,
+          exercises (name, muscle_group, type)
+        )
+      `)
+      .order('date', { ascending: false })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (!error) setWorkouts(data)
+        setLoading(false)
+      })
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider, useAuth } from '@/hooks/useAuth'
-import { ThemeProvider } from '@/hooks/useTheme'
+import { useAuth } from '@/hooks/useAuth'
+import { AuthProvider } from '@/hooks/AuthProvider'
+import { ThemeProvider } from '@/hooks/ThemeProvider'
 import ProtectedRoute from '@/components/auth/ProtectedRoute'
 import LoginPage from '@/pages/LoginPage'
 import ResetPasswordPage from '@/pages/ResetPasswordPage'
@@ -12,7 +13,7 @@ import ImportPage from '@/pages/ImportPage'
 import SettingsPage from '@/pages/SettingsPage'
 import ExerciseDetailPage from '@/pages/ExerciseDetailPage'
 import ChatPage from '@/pages/ChatPage'
-import { ChatProvider } from '@/hooks/useChatContext'
+import { ChatProvider } from '@/hooks/ChatProvider'
 
 function AppRoutes() {
   const { user, loading } = useAuth()

@@ -38,6 +38,9 @@ export default function ExerciseDetail() {
   const [loading, setLoading] = useState(true)
   const [timeRange, setTimeRange] = useState('all')
   const [refreshKey, setRefreshKey] = useState(0)
+  // Capture "now" once at mount so time-range filtering stays pure and stable
+  // across re-renders instead of calling Date.now() during render.
+  const [now] = useState(() => Date.now())
   const [editing, setEditing] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -106,7 +109,7 @@ export default function ExerciseDetail() {
 
   const getStartDate = (days) => {
     if (days === null) return null
-    return new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    return new Date(now - days * 24 * 60 * 60 * 1000)
       .toISOString()
       .split('T')[0]
   }
@@ -185,22 +188,20 @@ export default function ExerciseDetail() {
     return 0.3 + ((clamped - 1) / 5) * 0.7
   }
 
-  const RepDot = (props) => {
-    const { cx, cy, payload } = props
+  // Render callbacks (not components) so recharts gets a plain <circle> element
+  // per point without a new component identity being created each render.
+  const renderRepDot = (props) => {
+    const { cx, cy, payload, index } = props
     if (cx == null || cy == null) return null
     const opacity = hasWeight ? repOpacity(payload?.reps) : 1
-    return (
-      <circle cx={cx} cy={cy} r={4} fill={dotColor} opacity={opacity} />
-    )
+    return <circle key={index} cx={cx} cy={cy} r={4} fill={dotColor} opacity={opacity} />
   }
 
-  const RepActiveDot = (props) => {
-    const { cx, cy, payload } = props
+  const renderRepActiveDot = (props) => {
+    const { cx, cy, payload, index } = props
     if (cx == null || cy == null) return null
     const opacity = hasWeight ? repOpacity(payload?.reps) : 1
-    return (
-      <circle cx={cx} cy={cy} r={6} fill={dotColor} opacity={opacity} />
-    )
+    return <circle key={index} cx={cx} cy={cy} r={6} fill={dotColor} opacity={opacity} />
   }
 
   const chartTitle = isTimed
@@ -383,8 +384,8 @@ export default function ExerciseDetail() {
                   dataKey="value"
                   stroke="hsl(var(--primary))"
                   strokeWidth={2}
-                  dot={<RepDot />}
-                  activeDot={<RepActiveDot />}
+                  dot={renderRepDot}
+                  activeDot={renderRepActiveDot}
                 />
               </LineChart>
             </ResponsiveContainer>
