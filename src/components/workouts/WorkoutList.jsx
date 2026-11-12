@@ -24,13 +24,19 @@ export default function WorkoutList() {
     searchParams.get('expand')?.split(',').filter(Boolean) ?? []
   )
   const workoutRefs = useRef({})
+  // Workout the user just expanded; consumed by the scroll effect below
+  const scrollTargetRef = useRef(null)
+  // Whether the one-time deep-link scroll (from ?expand= on page load) has run
+  const initialScrollDoneRef = useRef(false)
 
   const toggleExpand = (id) => {
     const next = new Set(expandedIds)
     if (next.has(id)) {
       next.delete(id)
+      scrollTargetRef.current = null // don't scroll on collapse
     } else {
       next.add(id)
+      scrollTargetRef.current = id
     }
     if (next.size === 0) {
       setSearchParams({})
@@ -39,11 +45,22 @@ export default function WorkoutList() {
     }
   }
 
-  // Scroll to first expanded workout after workouts load
+  // On first load, scroll to the first deep-linked workout; afterwards,
+  // scroll to whichever workout the user most recently expanded.
   useEffect(() => {
-    const firstId = searchParams.get('expand')?.split(',')[0]
-    if (firstId && workouts.length > 0 && workoutRefs.current[firstId]) {
-      workoutRefs.current[firstId].scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (workouts.length === 0) return
+
+    let targetId
+    if (!initialScrollDoneRef.current) {
+      initialScrollDoneRef.current = true
+      targetId = searchParams.get('expand')?.split(',')[0]
+    } else {
+      targetId = scrollTargetRef.current
+    }
+    scrollTargetRef.current = null
+
+    if (targetId && workoutRefs.current[targetId]) {
+      workoutRefs.current[targetId].scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }, [workouts, searchParams])
 
