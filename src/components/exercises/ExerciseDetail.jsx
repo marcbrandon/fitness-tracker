@@ -153,7 +153,9 @@ export default function ExerciseDetail() {
         ? 'Best (least assist)'
         : 'Personal Record'
 
-  const totalSessions = filteredEntries.length
+  // A session is a workout, not an entry row: chat logs one row per set, the
+  // workout form one row per exercise, so count distinct workouts.
+  const totalSessions = new Set(filteredEntries.map((e) => e.workout_id)).size
 
   const totalVolume = hasWeight
     ? filteredEntries.reduce(
