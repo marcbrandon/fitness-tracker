@@ -75,7 +75,12 @@
     @apply border-border;
   }
   html, body {
-    @apply w-full h-full overflow-x-hidden;
+    @apply w-full;
+    /* clip, not hidden: hidden (with h-full) turned <body> into the scroll
+       container, which on iOS desyncs position:fixed hit-testing (e.g. the chat
+       FAB) from where it's drawn after zoom or keyboard changes. clip prevents
+       horizontal overflow without creating a scroll container. */
+    overflow-x: clip;
   }
   body {
     @apply bg-background text-foreground;

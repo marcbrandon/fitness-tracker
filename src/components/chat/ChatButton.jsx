@@ -60,6 +60,14 @@ export default function ChatButton({ isOpen, onClick, corner, onCornerChange }) 
     }
   }
 
+  // iOS cancels the pointer when a touch turns into a system gesture (pinch,
+  // edge swipe, etc.); pointerup never fires, so reset or we'd stay stuck mid-drag.
+  const handlePointerCancel = () => {
+    startRef.current = null
+    movedRef.current = false
+    setDragPos(null)
+  }
+
   const style = dragPos
     ? { position: 'fixed', left: dragPos.x - 28, top: dragPos.y - 28, zIndex: 50, touchAction: 'none' }
     : { position: 'fixed', ...cornerStyle(corner), zIndex: 50, touchAction: 'none' }
@@ -70,6 +78,7 @@ export default function ChatButton({ isOpen, onClick, corner, onCornerChange }) 
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
       style={style}
       className={`flex items-center justify-center w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors select-none ${dragPos ? 'cursor-grabbing' : 'cursor-grab'}`}
       aria-label={isOpen ? 'Close chat' : 'Open AI Assistant'}
