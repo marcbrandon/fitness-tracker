@@ -64,7 +64,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'log_workout',
-    description: 'Append new exercise entries to a workout for a given date. Each call must contain ONLY the exercise(s) explicitly mentioned in the user\'s most recent message — do not include exercises from earlier in the conversation even if you think they may not have been logged yet. When in doubt, log less. Creates the workout if it does not exist yet. Provide exercise_name — matched case-insensitively against the exercise library. If multiple exercises match, they will be returned for clarification.',
+    description: 'Append new exercise entries to a workout for a given date. Each call must contain ONLY the exercise(s) explicitly mentioned in the user\'s most recent message — do not include exercises from earlier in the conversation even if you think they may not have been logged yet. When in doubt, log less. Creates the workout if it does not exist yet. Provide exercise_name — matched case-insensitively against the exercise library. If multiple exercises match, they will be returned for clarification. On success, returns session_totals: for each exercise just logged, every set logged for it on this date and the totals, read from the database after the insert — this is the authoritative "this session so far".',
     input_schema: {
       type: 'object',
       properties: {
@@ -379,6 +379,30 @@ export async function executeTool(name, input) {
         if (entriesError) return { error: entriesError.message }
       }
 
+      // Read back today's sets for the exercises just logged, after the insert, so
+      // "this session so far" reflects the database — including any sets that
+      // were edited or deleted since — rather than a client-side tally.
+      let sessionTotals
+      if (resolvedEntries.length > 0) {
+        const loggedIds = [...new Set(resolvedEntries.map((e) => e.exercise_id))]
+        const { data: todays } = await supabase
+          .from('workout_entries')
+          .select('exercise_id, sets, reps, weight, order_index, exercises(name)')
+          .eq('workout_id', workoutId)
+          .in('exercise_id', loggedIds)
+          .order('order_index')
+
+        sessionTotals = loggedIds.map((exerciseId) => {
+          const rows = (todays ?? []).filter((r) => r.exercise_id === exerciseId)
+          return {
+            exercise: rows[0]?.exercises?.name,
+            sets_logged: rows.reduce((sum, r) => sum + (r.sets ?? 1), 0),
+            volume_lbs: rows.reduce((sum, r) => sum + (r.sets ?? 1) * (r.reps ?? 0) * (r.weight ?? 0), 0),
+            sets: rows.map((r) => `${r.sets ?? 1}x${r.reps ?? 0}${r.weight ? ` @ ${r.weight}lbs` : ''}`),
+          }
+        })
+      }
+
       notifyDataChanged('workout')
       return {
         success: true,
@@ -386,6 +410,7 @@ export async function executeTool(name, input) {
         date: input.date,
         created: wasCreated,
         entries_added: resolvedEntries.length,
+        ...(sessionTotals && { session_totals: sessionTotals }),
       }
     }
 

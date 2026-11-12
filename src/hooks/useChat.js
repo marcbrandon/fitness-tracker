@@ -28,25 +28,20 @@ export function useChat() {
   const [isWorking, setIsWorking] = useState(false)
   const [error, setError] = useState(null)
   const [systemPrompt, setSystemPrompt] = useState(null)
-  const [sessionLog, setSessionLog] = useState(() => restored?.sessionLog ?? []) // exercises confirmed logged this session
-  const [sessionDate, setSessionDate] = useState(() => restored?.sessionDate ?? todayLocal())
 
   // Persist the conversation whenever it changes (and clear storage once the
   // conversation is emptied, e.g. via clearChat) so a reload resumes cleanly.
   useEffect(() => {
     try {
-      if (!messages.length && !apiMessages.length && !sessionLog.length) {
+      if (!messages.length && !apiMessages.length) {
         localStorage.removeItem(CHAT_STORAGE_KEY)
       } else {
-        localStorage.setItem(
-          CHAT_STORAGE_KEY,
-          JSON.stringify({ messages, apiMessages, sessionLog, sessionDate })
-        )
+        localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({ messages, apiMessages }))
       }
     } catch {
       // storage full/unavailable — non-fatal, chat still works in-memory
     }
-  }, [messages, apiMessages, sessionLog, sessionDate])
+  }, [messages, apiMessages])
 
   const buildSystemPrompt = useCallback(() => {
     const today = todayLocal()
@@ -84,39 +79,12 @@ When the user mentions an exercise name during a workout session:
 - Call get_exercise_pr for the exercise if you don't already know the PR from earlier in this session.
 - CRITICAL: Never call log_workout in the same response as get_last_exercise_session, get_recent_workouts, or get_exercise_pr. Always fetch data first, then call log_workout in the next response after you have the results.
 - Before logging the entry, show a one-row table of that last session: Exercise | Sets | Reps | Weight | Volume. Use only workouts from a previous date — never count today's existing entries as "last session."
-- After calling log_workout, append a running volume comparison: "Last session: Xlbs — This session so far: Ylbs". For "this session so far," read the totals directly from the SESSION LOG in the system prompt — do not compute from get_recent_workouts data or from memory. If no session log entry exists for the exercise yet, the total is just the set you just logged.
+- After calling log_workout, append a running volume comparison: "Last session: Xlbs — This session so far: Ylbs". For "this session so far," use session_totals from that log_workout result (volume_lbs, sets_logged) — it is read from the database after the insert and already includes the set you just logged. Do not compute it yourself from earlier messages, memory, or get_recent_workouts data.
 - If the logged weight exceeds the all-time PR, congratulate the user on the new record.
 - Volume for a single entry = sets × reps × weight.
 - If the user disputes what's been logged (questions a count, says "that's wrong", etc.), call get_recent_workouts with today's date to get the ground truth before responding. Present that data verbatim — do not infer or adjust.
 
 Be concise. Confirm only after tool calls succeed.`
-  }, [])
-
-  const buildSessionContext = useCallback((log) => {
-    if (!log.length) return null
-
-    // Group entries by exercise and pre-compute totals so the model
-    // doesn't need to count or sum — it just reads the numbers.
-    const byExercise = {}
-    for (const e of log) {
-      if (!byExercise[e.exercise_name]) byExercise[e.exercise_name] = []
-      byExercise[e.exercise_name].push(e)
-    }
-
-    const lines = []
-    for (const [name, entries] of Object.entries(byExercise)) {
-      const totalSets = entries.reduce((sum, e) => sum + (e.sets ?? 1), 0)
-      const totalVolume = entries.reduce((sum, e) => sum + (e.sets ?? 1) * (e.reps ?? 0) * (e.weight ?? 0), 0)
-      const entryLines = entries.map((e) => {
-        const parts = [`${e.sets ?? 1}x${e.reps ?? 0}`]
-        if (e.weight) parts.push(`@ ${e.weight}lbs`)
-        return `  • ${parts.join(' ')}`
-      })
-      lines.push(`${name} — ${totalSets} set(s) logged, ${totalVolume} lbs volume this session:`)
-      lines.push(...entryLines)
-    }
-
-    return `SESSION LOG (authoritative — trust this over any other source for "this session so far" counts and volume):\n${lines.join('\n')}\n\nDo NOT re-log any exercise listed above unless the user explicitly reports a new set.`
   }, [])
 
   const initChat = useCallback(() => {
@@ -128,22 +96,11 @@ Be concise. Confirm only after tool calls succeed.`
     setMessages([])
     setApiMessages([])
     setError(null)
-    setSessionLog([])
-    setSessionDate(todayLocal())
     setSystemPrompt(buildSystemPrompt())
   }, [buildSystemPrompt])
 
   const sendMessage = useCallback(async (text) => {
     if (!text.trim() || isLoading) return
-
-    // Reset session log if the day has rolled over — "this session" is same-day.
-    const today = todayLocal()
-    let workingSessionLog = sessionLog
-    if (today !== sessionDate) {
-      workingSessionLog = []
-      setSessionLog([])
-      setSessionDate(today)
-    }
 
     setMessages((prev) => [...prev, { role: 'user', content: text.trim() }])
     setIsLoading(true)
@@ -152,7 +109,6 @@ Be concise. Confirm only after tool calls succeed.`
     // Sliding window over persisted history keeps the request bounded.
     const trimmedHistory = apiMessages.slice(-MAX_HISTORY_MESSAGES)
     let currentApiMessages = [...trimmedHistory, { role: 'user', content: text.trim() }]
-    let currentSessionLog = workingSessionLog
     let assistantText = null
     let iterations = 0
 
@@ -165,14 +121,9 @@ Be concise. Confirm only after tool calls succeed.`
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
         const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-        // Build system blocks: static (cached) + dynamic session log (uncached)
         const systemBlocks = [
           { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },
         ]
-        const sessionContext = buildSessionContext(currentSessionLog)
-        if (sessionContext) {
-          systemBlocks.push({ type: 'text', text: sessionContext })
-        }
 
         const res = await fetch(`${supabaseUrl}/functions/v1/claude-chat`, {
           method: 'POST',
@@ -228,25 +179,6 @@ Be concise. Confirm only after tool calls succeed.`
           const writeResults = await Promise.all(writeBlocks.map(runBlock))
           const toolResults = [...readResults, ...writeResults]
 
-          const newEntries = []
-          for (const tr of toolResults) {
-            const result = JSON.parse(tr.content)
-            if (tr._block.name === 'log_workout' && result.success) {
-              for (const entry of tr._block.input.entries ?? []) {
-                newEntries.push({
-                  exercise_name: entry.exercise_name,
-                  sets: entry.sets ?? 1,
-                  reps: entry.reps,
-                  weight: entry.weight,
-                })
-              }
-            }
-          }
-          if (newEntries.length) {
-            currentSessionLog = [...currentSessionLog, ...newEntries]
-            setSessionLog(currentSessionLog)
-          }
-
           const cleanToolResults = toolResults.map((tr) => ({
             type: tr.type,
             tool_use_id: tr.tool_use_id,
@@ -288,7 +220,7 @@ Be concise. Confirm only after tool calls succeed.`
       setIsLoading(false)
       setIsWorking(false)
     }
-  }, [apiMessages, isLoading, systemPrompt, sessionLog, sessionDate, buildSessionContext])
+  }, [apiMessages, isLoading, systemPrompt])
 
   return {
     messages,
