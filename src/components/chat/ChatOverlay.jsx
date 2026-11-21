@@ -31,6 +31,27 @@ export default function ChatOverlay({ isOpen, onClose, chat, corner }) {
     if (isOpen) initChat()
   }, [isOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // In the mobile bottom-sheet layout the sheet is modal, so stop the page
+  // behind it from scrolling. Lock the root element rather than making <body>
+  // a scroll container or position:fixed — either desyncs iOS hit-testing of
+  // fixed elements like the chat FAB. The desktop float layout is non-modal
+  // and leaves page scrolling alone.
+  useEffect(() => {
+    if (!isOpen) return
+    const root = document.documentElement
+    const previous = root.style.overflow
+    const desktop = window.matchMedia('(min-width: 40rem)') // Tailwind's sm
+    const apply = () => {
+      root.style.overflow = desktop.matches ? previous : 'hidden'
+    }
+    apply()
+    desktop.addEventListener('change', apply)
+    return () => {
+      desktop.removeEventListener('change', apply)
+      root.style.overflow = previous
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   const handleExpand = () => {
@@ -43,7 +64,7 @@ export default function ChatOverlay({ isOpen, onClose, chat, corner }) {
     <>
       {/* Mobile backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/20 sm:hidden"
+        className="fixed inset-0 z-40 bg-black/20 touch-none sm:hidden"
         onClick={onClose}
       />
 
