@@ -90,6 +90,14 @@
      check limits this to iOS: Mac Safari also supports the keyword but maps
      it to its 13px system size. The shorthand also resets family, weight and
      line height, so restore Tailwind's defaults and keep only the size. */
+  /* While typing in the mobile chat sheet, hide the page behind it so it
+     can't show through the translucent iOS keyboard. Set by ChatOverlay. */
+  html[data-chat-typing] #root {
+    visibility: hidden;
+  }
+  html[data-chat-typing] [data-chat-sheet] {
+    visibility: visible;
+  }
   @supports (font: -apple-system-body) and (-webkit-touch-callout: none) {
     html {
       font: -apple-system-body;

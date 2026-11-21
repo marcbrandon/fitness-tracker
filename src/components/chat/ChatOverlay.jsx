@@ -101,6 +101,7 @@ export default function ChatOverlay({ isOpen, onClose, chat, corner }) {
       desktop.removeEventListener('change', apply)
       document.removeEventListener('touchmove', blockTouchMove)
       root.style.overflow = previous
+      delete root.dataset.chatTyping
     }
   }, [isOpen])
 
@@ -122,6 +123,21 @@ export default function ChatOverlay({ isOpen, onClose, chat, corner }) {
     }
   }
 
+  // The iOS keyboard and its suggestion bar are translucent, and iOS clips
+  // fixed elements like this sheet at the bottom of the shrunken window, so
+  // page content shows through behind them. While the message box has focus
+  // in the mobile layout (i.e. the keyboard is up), hide the page so only the
+  // body background shows there. See html[data-chat-typing] in index.css.
+  const root = document.documentElement
+  const handleFocus = (e) => {
+    if (e.target.tagName === 'TEXTAREA' && !window.matchMedia(DESKTOP_QUERY).matches) {
+      root.dataset.chatTyping = ''
+    }
+  }
+  const handleBlur = (e) => {
+    if (e.target.tagName === 'TEXTAREA') delete root.dataset.chatTyping
+  }
+
   const handleExpand = () => {
     setPreviousPath(location.pathname)
     onClose()
@@ -140,14 +156,10 @@ export default function ChatOverlay({ isOpen, onClose, chat, corner }) {
       <div
         className="fixed z-50 flex flex-col bg-background border border-b-0 sm:border-b shadow-xl bottom-0 left-0 right-0 h-[70vh] rounded-t-2xl sm:left-[var(--chat-left)] sm:right-[var(--chat-right)] sm:top-[var(--chat-top)] sm:bottom-[var(--chat-bottom)] sm:w-96 sm:h-[500px] sm:rounded-2xl"
         style={{ ...cornerStyle(corner), ...sheetStyle }}
+        data-chat-sheet
+        onFocus={handleFocus}
+        onBlur={handleBlur}
       >
-        {/* The iOS keyboard and its suggestion bar are translucent; fill the
-            area below the sheet so the page doesn't show through. Always
-            rendered on mobile: iOS may shrink the window along with the
-            visual viewport, so the keyboard can't be reliably detected. With
-            the keyboard closed this sits off-screen. */}
-        <div aria-hidden="true" className="absolute -left-px -right-px top-full h-screen bg-background sm:hidden" />
-
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
           <span className="font-semibold text-sm">AI Assistant</span>
