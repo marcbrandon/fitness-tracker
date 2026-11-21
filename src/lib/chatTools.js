@@ -9,6 +9,17 @@ const todayLocal = () => new Date().toLocaleDateString('en-CA')
 // Resolve an exercise name to { id, name }, scoped to the user's library so we
 // don't accidentally match another user's exercise with a similar name.
 // Tries exact match first, falls back to partial, returns error object on ambiguity or no match.
+// Backstop against misreading set shorthand like "2@225" as 2 sets of 225 reps.
+// Returns an error message for implausible weighted entries, or null.
+function checkPlausibleEntry({ sets, reps, weight, confirm_unusual }, label = 'entry') {
+  if (confirm_unusual || !(weight > 0)) return null
+  const problems = []
+  if (reps > 50) problems.push(`${reps} reps`)
+  if (sets > 10) problems.push(`${sets} sets`)
+  if (!problems.length) return null
+  return `Rejected ${label}: ${problems.join(' and ')} at ${weight} lbs is implausible. Re-read the user's set notation: "R@W" is ONE set of R reps at W lbs (e.g. "2@225" → sets 1, reps 2, weight 225), and "SxR@W" is S sets of R reps. Nothing was saved. Fix the values and retry; only pass confirm_unusual: true if the user explicitly confirms these numbers.`
+}
+
 async function resolveExerciseName(name) {
   const trimmed = name.trim()
   const { data: exact, error: exactError } = await supabase
@@ -88,10 +99,11 @@ export const TOOL_DEFINITIONS = [
             type: 'object',
             properties: {
               exercise_name: { type: 'string', description: 'Name of the exercise — matched case-insensitively against the library' },
-              sets: { type: 'number', description: 'Number of sets (default to 1 if not specified)' },
-              reps: { type: 'number', description: 'Number of reps per set' },
-              weight: { type: 'number', description: 'Weight in lbs' },
+              sets: { type: 'number', description: 'Number of sets (default to 1 if not specified). "2@225" is 1 set; only "SxR@W" (e.g. "3x7@135") gives sets > 1.' },
+              reps: { type: 'number', description: 'Number of reps per set. In "2@225" reps is 2; in "3x7@135" reps is 7.' },
+              weight: { type: 'number', description: 'Weight in lbs — the number after "@". In "2@225" weight is 225.' },
               notes: { type: 'string', description: 'Optional notes for this entry' },
+              confirm_unusual: { type: 'boolean', description: 'Set true only after the user has explicitly confirmed an entry that was rejected as implausible.' },
             },
             required: ['exercise_name'],
           },
@@ -133,10 +145,11 @@ export const TOOL_DEFINITIONS = [
       properties: {
         entry_id: { type: 'string', description: 'UUID of the workout entry to update' },
         exercise_name: { type: 'string', description: 'New exercise name — matched case-insensitively. Provide this to change which exercise the entry is for.' },
-        sets: { type: 'number', description: 'New number of sets' },
-        reps: { type: 'number', description: 'New number of reps per set' },
-        weight: { type: 'number', description: 'New weight in lbs' },
+        sets: { type: 'number', description: 'New number of sets. "2@225" is 1 set; only "SxR@W" gives sets > 1.' },
+        reps: { type: 'number', description: 'New number of reps per set. In "2@225" reps is 2.' },
+        weight: { type: 'number', description: 'New weight in lbs — the number after "@".' },
         notes: { type: 'string', description: 'New notes for this entry' },
+        confirm_unusual: { type: 'boolean', description: 'Set true only after the user has explicitly confirmed an entry that was rejected as implausible.' },
       },
       required: ['entry_id'],
     },
@@ -296,6 +309,11 @@ export async function executeTool(name, input) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return { error: 'Not authenticated' }
 
+      for (const entry of input.entries ?? []) {
+        const problem = checkPlausibleEntry(entry, entry.exercise_name)
+        if (problem) return { error: problem }
+      }
+
       // Resolve exercise names to IDs
       const resolvedEntries = []
       for (const entry of input.entries ?? []) {
@@ -442,6 +460,9 @@ export async function executeTool(name, input) {
     }
 
     case 'update_workout_entry': {
+      const problem = checkPlausibleEntry(input)
+      if (problem) return { error: problem }
+
       const updates = {}
 
       if (input.exercise_name) {
