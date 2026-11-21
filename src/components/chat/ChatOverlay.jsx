@@ -119,7 +119,6 @@ export default function ChatOverlay({ isOpen, onClose, chat, corner }) {
       height,
       // The keyboard covers the home indicator, so drop the safe-area gap.
       paddingBottom: viewport.keyboardOpen ? 0 : 'env(safe-area-inset-bottom)',
-      borderBottomWidth: viewport.keyboardOpen ? 0 : undefined,
     }
   }
 
@@ -139,14 +138,15 @@ export default function ChatOverlay({ isOpen, onClose, chat, corner }) {
 
       {/* Overlay panel — mobile: bottom sheet; desktop: floats near FAB */}
       <div
-        className="fixed z-50 flex flex-col bg-background border shadow-xl bottom-0 left-0 right-0 h-[70vh] rounded-t-2xl sm:left-[var(--chat-left)] sm:right-[var(--chat-right)] sm:top-[var(--chat-top)] sm:bottom-[var(--chat-bottom)] sm:w-96 sm:h-[500px] sm:rounded-2xl"
+        className="fixed z-50 flex flex-col bg-background border border-b-0 sm:border-b shadow-xl bottom-0 left-0 right-0 h-[70vh] rounded-t-2xl sm:left-[var(--chat-left)] sm:right-[var(--chat-right)] sm:top-[var(--chat-top)] sm:bottom-[var(--chat-bottom)] sm:w-96 sm:h-[500px] sm:rounded-2xl"
         style={{ ...cornerStyle(corner), ...sheetStyle }}
       >
-        {/* The iOS keyboard is translucent; fill the area behind it so the
-            page doesn't show through. */}
-        {viewport?.keyboardOpen && (
-          <div aria-hidden="true" className="absolute -left-px -right-px top-full h-screen bg-background" />
-        )}
+        {/* The iOS keyboard and its suggestion bar are translucent; fill the
+            area below the sheet so the page doesn't show through. Always
+            rendered on mobile: iOS may shrink the window along with the
+            visual viewport, so the keyboard can't be reliably detected. With
+            the keyboard closed this sits off-screen. */}
+        <div aria-hidden="true" className="absolute -left-px -right-px top-full h-screen bg-background sm:hidden" />
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
