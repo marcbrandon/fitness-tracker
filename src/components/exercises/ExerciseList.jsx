@@ -13,6 +13,15 @@ import {
 } from '@/components/ui/table'
 import ExerciseForm from './ExerciseForm'
 
+// Fetch each entry's workout_id so sessions can be counted per workout. The
+// database can't count distinct workouts in an embedded select.
+const EXERCISE_SELECT = '*, workout_entries(workout_id), user_exercise_library!inner(user_id)'
+
+// A session is a workout, not an entry row: chat logs one row per set, the
+// workout form one row per exercise. Matches the exercise detail page.
+const countSessions = (exercise) =>
+  new Set((exercise.workout_entries ?? []).map((e) => e.workout_id)).size
+
 export default function ExerciseList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [exercises, setExercises] = useState([])
@@ -41,7 +50,7 @@ export default function ExerciseList() {
   const fetchExercises = async () => {
     const { data, error } = await supabase
       .from('exercises')
-      .select('*, workout_entries(count), user_exercise_library!inner(user_id)')
+      .select(EXERCISE_SELECT)
       .order('name')
 
     if (!error) {
@@ -54,7 +63,7 @@ export default function ExerciseList() {
     let cancelled = false
     supabase
       .from('exercises')
-      .select('*, workout_entries(count), user_exercise_library!inner(user_id)')
+      .select(EXERCISE_SELECT)
       .order('name')
       .then(({ data, error }) => {
         if (cancelled) return
@@ -168,7 +177,7 @@ export default function ExerciseList() {
                       : '-'}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {exercise.workout_entries?.[0]?.count || 0}
+                    {countSessions(exercise)}
                   </TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button
