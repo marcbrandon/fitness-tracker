@@ -24,6 +24,8 @@ const cornerStyle = (corner) => {
 
 // Tailwind's sm breakpoint: below it the overlay is a modal bottom sheet.
 const DESKTOP_QUERY = '(min-width: 40rem)'
+// Touch-first devices, where focusing the message box opens a soft keyboard.
+const TOUCH_QUERY = '(pointer: coarse)'
 // The sheet's height as a fraction of the screen, matching h-[70vh].
 const SHEET_FRACTION = 0.7
 
@@ -42,8 +44,6 @@ function useSheetViewport(active) {
       setViewport(desktop.matches ? null : {
         top: vv.offsetTop,
         height: vv.height,
-        // The keyboard shrinks the visual viewport well below the window.
-        keyboardOpen: window.innerHeight - vv.height > 100,
       })
     }
     update()
@@ -101,41 +101,69 @@ export default function ChatOverlay({ isOpen, onClose, chat, corner }) {
       desktop.removeEventListener('change', apply)
       document.removeEventListener('touchmove', blockTouchMove)
       root.style.overflow = previous
-      delete root.dataset.chatTyping
     }
   }, [isOpen])
 
   const viewport = useSheetViewport(isOpen)
 
+  // The message box has focus in the mobile layout on a touch device, i.e.
+  // the iOS keyboard is up. Window-size checks can't detect the keyboard: iOS may shrink the
+  // window along with the visual viewport, by different amounts depending on
+  // scroll position.
+  const [typing, setTyping] = useState(false)
+  // Reset when the sheet closes; blur doesn't reliably fire on unmount.
+  if (!isOpen && typing) setTyping(false)
+
+  // The iOS keyboard and its suggestion bar are translucent, and iOS clips
+  // fixed elements like this sheet at the bottom of the shrunken window, so
+  // page content shows through behind them. While typing, hide the page so
+  // only the body background shows there. See html[data-chat-typing] in
+  // index.css.
+  useEffect(() => {
+    if (!typing) return
+    const root = document.documentElement
+    root.dataset.chatTyping = ''
+    return () => {
+      delete root.dataset.chatTyping
+    }
+  }, [typing])
+
   if (!isOpen) return null
 
-  // Mobile: keep the sheet's bottom on the top of the keyboard (or the screen
-  // bottom when it's closed), shrinking it if the visible area is short.
+  // Mobile: keep the sheet's bottom at the bottom of the visible area. While
+  // typing, fill everything above the keyboard; otherwise use the normal
+  // sheet height, shrinking it if the visible area is short.
   let sheetStyle = { paddingBottom: 'env(safe-area-inset-bottom)' }
   if (viewport) {
-    const height = Math.min(window.innerHeight * SHEET_FRACTION, viewport.height)
+    const height = typing
+      ? viewport.height
+      : Math.min(window.innerHeight * SHEET_FRACTION, viewport.height)
     sheetStyle = {
       top: viewport.top + viewport.height - height,
       bottom: 'auto',
       height,
       // The keyboard covers the home indicator, so drop the safe-area gap.
-      paddingBottom: viewport.keyboardOpen ? 0 : 'env(safe-area-inset-bottom)',
+      paddingBottom: typing ? 0 : 'env(safe-area-inset-bottom)',
     }
   }
 
-  // The iOS keyboard and its suggestion bar are translucent, and iOS clips
-  // fixed elements like this sheet at the bottom of the shrunken window, so
-  // page content shows through behind them. While the message box has focus
-  // in the mobile layout (i.e. the keyboard is up), hide the page so only the
-  // body background shows there. See html[data-chat-typing] in index.css.
-  const root = document.documentElement
   const handleFocus = (e) => {
-    if (e.target.tagName === 'TEXTAREA' && !window.matchMedia(DESKTOP_QUERY).matches) {
-      root.dataset.chatTyping = ''
+    if (
+      e.target.tagName === 'TEXTAREA' &&
+      !window.matchMedia(DESKTOP_QUERY).matches &&
+      window.matchMedia(TOUCH_QUERY).matches
+    ) {
+      setTyping(true)
     }
   }
+  // Keep focus in the message box when a sheet button is pressed. Otherwise
+  // the blur ends typing mode and resizes the sheet before the click lands,
+  // so the click misses (e.g. Send). It also keeps the keyboard up after Send.
+  const handleMouseDown = (e) => {
+    if (e.target.closest('button')) e.preventDefault()
+  }
   const handleBlur = (e) => {
-    if (e.target.tagName === 'TEXTAREA') delete root.dataset.chatTyping
+    if (e.target.tagName === 'TEXTAREA') setTyping(false)
   }
 
   const handleExpand = () => {
@@ -159,6 +187,7 @@ export default function ChatOverlay({ isOpen, onClose, chat, corner }) {
         data-chat-sheet
         onFocus={handleFocus}
         onBlur={handleBlur}
+        onMouseDown={handleMouseDown}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
