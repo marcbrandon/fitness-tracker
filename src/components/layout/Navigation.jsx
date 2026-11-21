@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
+import { CircleUserRound, EllipsisVertical } from 'lucide-react'
+import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -9,12 +11,25 @@ const navItems = [
   { to: '/nutrition', label: 'Nutrition' },
 ]
 
+// Width reserved for the menu button at the right end of the nav.
+const MENU_BUTTON_WIDTH = 44
+// Matches the ul's gap-1.
+const ITEM_GAP = 4
+
+const menuLinkClass = (isActive) =>
+  cn(
+    "block w-full text-left px-4 py-2 text-sm font-medium transition-colors",
+    isActive
+      ? "text-foreground bg-muted"
+      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+  )
+
 export default function Navigation() {
+  const { user, signOut } = useAuth()
   const [visibleCount, setVisibleCount] = useState(navItems.length)
   const [menuOpen, setMenuOpen] = useState(false)
   const containerRef = useRef(null)
   const itemsRef = useRef([])
-  const moreButtonRef = useRef(null)
   const location = useLocation()
 
   // Close the menu on route change by adjusting state during render when the
@@ -25,29 +40,21 @@ export default function Navigation() {
     setMenuOpen(false)
   }
 
-  // Calculate how many items fit
+  // Fit as many tabs as possible, leaving room for the menu button.
   useEffect(() => {
     const calculateVisibleItems = () => {
       if (!containerRef.current) return
 
-      const containerWidth = containerRef.current.offsetWidth
-      const moreButtonWidth = 60 // Approximate width for "more" button
+      const available = containerRef.current.offsetWidth - MENU_BUTTON_WIDTH
       let totalWidth = 0
       let count = 0
 
-      for (let i = 0; i < itemsRef.current.length; i++) {
-        const item = itemsRef.current[i]
+      for (const item of itemsRef.current) {
         if (!item) continue
-
-        const itemWidth = item.offsetWidth
-        const neededSpace = totalWidth + itemWidth + (i < navItems.length - 1 ? moreButtonWidth : 0)
-
-        if (neededSpace <= containerWidth) {
-          totalWidth += itemWidth
-          count++
-        } else {
-          break
-        }
+        const needed = totalWidth + (count > 0 ? ITEM_GAP : 0) + item.offsetWidth
+        if (needed > available) break
+        totalWidth = needed
+        count++
       }
 
       setVisibleCount(count || 1) // Always show at least 1
@@ -60,14 +67,22 @@ export default function Navigation() {
 
   const visibleItems = navItems.slice(0, visibleCount)
   const overflowItems = navItems.slice(visibleCount)
+  // With tabs overflowing, one "more" menu holds both the extra tabs and the
+  // account options. Otherwise the button is just the account menu.
+  const MenuIcon = overflowItems.length > 0 ? EllipsisVertical : CircleUserRound
+
+  const handleSignOut = async () => {
+    setMenuOpen(false)
+    await signOut()
+  }
 
   return (
     <nav className="border-b bg-background relative">
       <div className="max-w-6xl mx-auto px-4">
         <div ref={containerRef} className="flex items-center">
           <ul className="flex gap-1">
-            {visibleItems.map((item, index) => (
-              <li key={item.to} ref={(el) => (itemsRef.current[index] = el)}>
+            {visibleItems.map((item) => (
+              <li key={item.to}>
                 <NavLink
                   to={item.to}
                   className={({ isActive }) =>
@@ -85,7 +100,7 @@ export default function Navigation() {
             ))}
           </ul>
 
-          {/* Hidden items for measurement */}
+          {/* Hidden copies of every tab, measured to decide how many fit */}
           <div className="absolute invisible" aria-hidden="true">
             <ul className="flex gap-1">
               {navItems.map((item, index) => (
@@ -98,47 +113,56 @@ export default function Navigation() {
             </ul>
           </div>
 
-          {/* Overflow menu button */}
-          {overflowItems.length > 0 && (
-            <div className="relative ml-auto" ref={moreButtonRef}>
+          {(user || overflowItems.length > 0) && (
+            <div className="relative ml-auto">
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
                 className={cn(
-                  "p-3 text-sm font-medium transition-colors",
+                  "p-2.5 transition-colors",
                   menuOpen ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                 )}
-                aria-label="More navigation options"
+                aria-label={overflowItems.length > 0 ? "More options" : "Account menu"}
+                aria-expanded={menuOpen}
               >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="5" r="2" />
-                  <circle cx="12" cy="12" r="2" />
-                  <circle cx="12" cy="19" r="2" />
-                </svg>
+                <MenuIcon className="w-6 h-6" strokeWidth={1.75} />
               </button>
 
-              {/* Dropdown */}
               {menuOpen && (
-                <div className="absolute right-0 top-full mt-1 bg-background border rounded-md shadow-lg z-50 min-w-40">
-                  <ul className="py-1">
-                    {overflowItems.map((item) => (
-                      <li key={item.to}>
-                        <NavLink
-                          to={item.to}
+                <div className="absolute right-0 top-full mt-1 bg-background border rounded-md shadow-lg z-50 min-w-48">
+                  {overflowItems.length > 0 && (
+                    <ul className={cn("py-1", user && "border-b")}>
+                      {overflowItems.map((item) => (
+                        <li key={item.to}>
+                          <NavLink
+                            to={item.to}
+                            onClick={() => setMenuOpen(false)}
+                            className={({ isActive }) => menuLinkClass(isActive)}
+                          >
+                            {item.label}
+                          </NavLink>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {user && (
+                    <>
+                      <div className="px-4 py-3 border-b">
+                        <p className="text-sm font-medium truncate">{user.email}</p>
+                      </div>
+                      <div className="py-1">
+                        <Link
+                          to="/settings"
                           onClick={() => setMenuOpen(false)}
-                          className={({ isActive }) =>
-                            cn(
-                              "block px-4 py-2 text-sm font-medium transition-colors",
-                              isActive
-                                ? "text-foreground bg-muted"
-                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                            )
-                          }
+                          className={menuLinkClass(location.pathname === '/settings')}
                         >
-                          {item.label}
-                        </NavLink>
-                      </li>
-                    ))}
-                  </ul>
+                          Settings
+                        </Link>
+                        <button onClick={handleSignOut} className={menuLinkClass(false)}>
+                          Sign Out
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
