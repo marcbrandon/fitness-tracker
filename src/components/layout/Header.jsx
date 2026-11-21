@@ -25,7 +25,10 @@ export default function Header() {
   return (
     <header className="border-b bg-background">
       <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold">Fitness Tracker</h1>
+        <h1 className="flex items-center gap-2 text-xl font-bold">
+          <img src="/icon.svg" alt="" className="h-8 w-8 rounded-lg" />
+          Fitness Tracker
+        </h1>
         {user && (
           <div className="relative">
             <button
