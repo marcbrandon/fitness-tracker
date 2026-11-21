@@ -31,11 +31,35 @@ const markdownComponents = {
 }
 
 export default function ChatMessages({ messages, isLoading, isWorking, error }) {
-  const bottomRef = useRef(null)
+  const scrollerRef = useRef(null)
 
+  // Scroll only the message list. scrollIntoView would also scroll every
+  // ancestor, including the page behind the chat sheet.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = scrollerRef.current
+    el?.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [messages, isLoading])
+
+  // When the list is resized (e.g. the iOS keyboard opens and the sheet
+  // shrinks), stay pinned to the newest message if the user was at the bottom.
+  const hasMessages = messages.length > 0 || isLoading
+  useEffect(() => {
+    const el = scrollerRef.current
+    if (!el) return
+    let atBottom = true
+    const onScroll = () => {
+      atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+    }
+    const observer = new ResizeObserver(() => {
+      if (atBottom) el.scrollTop = el.scrollHeight
+    })
+    el.addEventListener('scroll', onScroll, { passive: true })
+    observer.observe(el)
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      observer.disconnect()
+    }
+  }, [hasMessages])
 
   if (messages.length === 0 && !isLoading) {
     return (
@@ -48,7 +72,7 @@ export default function ChatMessages({ messages, isLoading, isWorking, error }) 
   }
 
   return (
-    <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-3">
+    <div ref={scrollerRef} data-chat-scroll className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-3">
       {messages.map((msg, i) => (
         <div
           key={i}
@@ -84,7 +108,6 @@ export default function ChatMessages({ messages, isLoading, isWorking, error }) 
         </div>
       )}
 
-      <div ref={bottomRef} />
     </div>
   )
 }

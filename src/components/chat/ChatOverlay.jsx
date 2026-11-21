@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Expand, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,45 @@ const cornerStyle = (corner) => {
   }
 }
 
+// Tailwind's sm breakpoint: below it the overlay is a modal bottom sheet.
+const DESKTOP_QUERY = '(min-width: 40rem)'
+// The sheet's height as a fraction of the screen, matching h-[70vh].
+const SHEET_FRACTION = 0.7
+
+// While the mobile sheet is open, track the visual viewport — the part of the
+// page not covered by the iOS keyboard. iOS keeps fixed elements attached to
+// the full-height layout viewport, so without this the sheet sits behind the
+// keyboard and the page shows between them. Returns null on desktop.
+function useSheetViewport(active) {
+  const [viewport, setViewport] = useState(null)
+
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!active || !vv) return
+    const desktop = window.matchMedia(DESKTOP_QUERY)
+    const update = () => {
+      setViewport(desktop.matches ? null : {
+        top: vv.offsetTop,
+        height: vv.height,
+        // The keyboard shrinks the visual viewport well below the window.
+        keyboardOpen: window.innerHeight - vv.height > 100,
+      })
+    }
+    update()
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    desktop.addEventListener('change', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+      desktop.removeEventListener('change', update)
+      setViewport(null)
+    }
+  }, [active])
+
+  return viewport
+}
+
 export default function ChatOverlay({ isOpen, onClose, chat, corner }) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -40,19 +79,49 @@ export default function ChatOverlay({ isOpen, onClose, chat, corner }) {
     if (!isOpen) return
     const root = document.documentElement
     const previous = root.style.overflow
-    const desktop = window.matchMedia('(min-width: 40rem)') // Tailwind's sm
+    const desktop = window.matchMedia(DESKTOP_QUERY)
+
+    // With the keyboard up, iOS lets a drag pan the page even when the root
+    // is overflow:hidden. Block one-finger drags except inside the message
+    // list, and only when it has something to scroll. Pinch zoom still works.
+    const blockTouchMove = (e) => {
+      if (desktop.matches || e.touches.length > 1) return
+      const scroller = e.target.closest?.('[data-chat-scroll]')
+      if (scroller && scroller.scrollHeight > scroller.clientHeight) return
+      e.preventDefault()
+    }
+
     const apply = () => {
       root.style.overflow = desktop.matches ? previous : 'hidden'
     }
     apply()
     desktop.addEventListener('change', apply)
+    document.addEventListener('touchmove', blockTouchMove, { passive: false })
     return () => {
       desktop.removeEventListener('change', apply)
+      document.removeEventListener('touchmove', blockTouchMove)
       root.style.overflow = previous
     }
   }, [isOpen])
 
+  const viewport = useSheetViewport(isOpen)
+
   if (!isOpen) return null
+
+  // Mobile: keep the sheet's bottom on the top of the keyboard (or the screen
+  // bottom when it's closed), shrinking it if the visible area is short.
+  let sheetStyle = { paddingBottom: 'env(safe-area-inset-bottom)' }
+  if (viewport) {
+    const height = Math.min(window.innerHeight * SHEET_FRACTION, viewport.height)
+    sheetStyle = {
+      top: viewport.top + viewport.height - height,
+      bottom: 'auto',
+      height,
+      // The keyboard covers the home indicator, so drop the safe-area gap.
+      paddingBottom: viewport.keyboardOpen ? 0 : 'env(safe-area-inset-bottom)',
+      borderBottomWidth: viewport.keyboardOpen ? 0 : undefined,
+    }
+  }
 
   const handleExpand = () => {
     setPreviousPath(location.pathname)
@@ -71,8 +140,14 @@ export default function ChatOverlay({ isOpen, onClose, chat, corner }) {
       {/* Overlay panel — mobile: bottom sheet; desktop: floats near FAB */}
       <div
         className="fixed z-50 flex flex-col bg-background border shadow-xl bottom-0 left-0 right-0 h-[70vh] rounded-t-2xl sm:left-[var(--chat-left)] sm:right-[var(--chat-right)] sm:top-[var(--chat-top)] sm:bottom-[var(--chat-bottom)] sm:w-96 sm:h-[500px] sm:rounded-2xl"
-        style={{ ...cornerStyle(corner), paddingBottom: 'env(safe-area-inset-bottom)' }}
+        style={{ ...cornerStyle(corner), ...sheetStyle }}
       >
+        {/* The iOS keyboard is translucent; fill the area behind it so the
+            page doesn't show through. */}
+        {viewport?.keyboardOpen && (
+          <div aria-hidden="true" className="absolute -left-px -right-px top-full h-screen bg-background" />
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
           <span className="font-semibold text-sm">AI Assistant</span>
