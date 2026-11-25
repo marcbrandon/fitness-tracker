@@ -2,7 +2,35 @@ import { useState, useEffect, useCallback } from 'react'
 import { TOOL_DEFINITIONS, executeTool } from '@/lib/chatTools'
 
 const MAX_TOOL_ITERATIONS = 10
-const MAX_HISTORY_MESSAGES = 8
+// History is windowed by user turns (a typed message plus every tool call,
+// tool result, and reply it produced) so a whole workout stays in context.
+// Tool calls are kept: with text-only history the model saw "Logged!" replies
+// with no tool calls behind them and concluded nothing had been logged.
+const MAX_HISTORY_TURNS = 40
+
+const isTextTurnStart = (m) => m.role === 'user' && typeof m.content === 'string'
+
+// Trim to the last `turns` user turns, always starting on a typed user message
+// so no tool_result is left without its tool_use.
+function trimToTurns(history, turns) {
+  const starts = []
+  history.forEach((m, i) => { if (isTextTurnStart(m)) starts.push(i) })
+  if (starts.length <= turns) return history.slice(starts[0] ?? history.length)
+  return history.slice(starts[starts.length - turns])
+}
+
+// Mark the end of the request for prompt caching so the next request (the
+// next tool iteration or the next turn) reads the shared history from cache.
+// Applied to a copy so breakpoints never accumulate in stored history.
+function withCacheBreakpoint(msgs) {
+  if (!msgs.length) return msgs
+  const last = msgs[msgs.length - 1]
+  const blocks = typeof last.content === 'string'
+    ? [{ type: 'text', text: last.content }]
+    : last.content.map((b) => ({ ...b }))
+  blocks[blocks.length - 1].cache_control = { type: 'ephemeral' }
+  return [...msgs.slice(0, -1), { ...last, content: blocks }]
+}
 
 const todayLocal = () => new Date().toLocaleDateString('en-CA')
 
@@ -71,12 +99,18 @@ Set notation — the user logs sets in shorthand. Parse it exactly like this:
 - The number after "@" is always the weight in lbs, never reps.
 - Comma-separated items are separate entries: "Bench 2@225, 10@205, 12@185" → three entries, each sets 1.
 
+Tables — the chat panel is narrow, so keep every table to four columns or fewer:
+- Group by exercise. Put each exercise's name in a "### " heading, then a table under it with columns Sets | Reps | Weight | Volume. Never add an Exercise column.
+- One row per logged entry, in the order logged. Never combine entries on one row (no "10/8/6" reps or "188/168/168" weights).
+- Volume = sets × reps × weight. For bodyweight and timed exercises, show "—" for Weight and Volume.
+- When there are totals, add them as a line of text after the table rather than as an extra row or column.
+
 When updating a workout entry to use a different exercise that doesn't exist yet, create it with add_exercise first, then retry the update.
 
 When the user indicates they are starting a workout by naming a routine (e.g. "Push day", "leg day", "pull"), do all of the following in a single response:
 1. Call log_workout for today's date with the appropriate routine value (Core, Legs, Push, Pull, or Shoulders) and no entries yet.
 2. Call get_recent_workouts with that routine filter (limit 2) to fetch the last session for that routine.
-3. Reply with a confirmation that today's workout has been created, then a table showing the exercises from the previous session (Exercise | Sets | Reps | Weight | Volume), where Volume = sets × reps × weight.
+3. Reply with a confirmation that today's workout has been created, then the exercises from the previous session, formatted as described under "Tables".
 
 When the user mentions an exercise name during a workout session:
 - Establish the last time they did THIS exercise on any previous date — not necessarily the most recent session. An exercise is often trained only every few sessions, so it is frequently absent from the most recent workout.
@@ -84,10 +118,11 @@ When the user mentions an exercise name during a workout session:
   - Otherwise call get_last_exercise_session for it. NEVER report "N/A" or "no previous data" for an exercise just because it was missing from the most recent session — call get_last_exercise_session first, and only treat it as having no history if it returns last_session: null.
 - Call get_exercise_pr for the exercise if you don't already know the PR from earlier in this session.
 - CRITICAL: Never call log_workout in the same response as get_last_exercise_session, get_recent_workouts, or get_exercise_pr. Always fetch data first, then call log_workout in the next response after you have the results.
-- Before logging the entry, show a one-row table of that last session: Exercise | Sets | Reps | Weight | Volume. Use only workouts from a previous date — never count today's existing entries as "last session."
+- Before logging the entry, show that last session for this exercise, formatted as described under "Tables". Use only workouts from a previous date — never count today's existing entries as "last session."
 - After calling log_workout, append a running volume comparison: "Last session: Xlbs — This session so far: Ylbs". For "this session so far," use session_totals from that log_workout result (volume_lbs, sets_logged) — it is read from the database after the insert and already includes the set you just logged. Do not compute it yourself from earlier messages, memory, or get_recent_workouts data.
 - If the logged weight exceeds the all-time PR, congratulate the user on the new record.
 - Volume for a single entry = sets × reps × weight.
+- Earlier messages may have been trimmed from this conversation. If you are missing context (which workout, which exercise a set belongs to, what has been logged), look it up with get_recent_workouts for today's date instead of asking the user or claiming nothing was logged. A set given without an exercise name ("10@25", "6 more") belongs to the exercise most recently logged today.
 - If the user disputes what's been logged (questions a count, says "that's wrong", etc.), call get_recent_workouts with today's date to get the ground truth before responding. Present that data verbatim — do not infer or adjust.
 
 Be concise. Confirm only after tool calls succeed.`
@@ -113,7 +148,7 @@ Be concise. Confirm only after tool calls succeed.`
     setError(null)
 
     // Sliding window over persisted history keeps the request bounded.
-    const trimmedHistory = apiMessages.slice(-MAX_HISTORY_MESSAGES)
+    const trimmedHistory = trimToTurns(apiMessages, MAX_HISTORY_TURNS - 1)
     let currentApiMessages = [...trimmedHistory, { role: 'user', content: text.trim() }]
     let assistantText = null
     let iterations = 0
@@ -140,7 +175,7 @@ Be concise. Confirm only after tool calls succeed.`
           },
           body: JSON.stringify({
             system: systemBlocks,
-            messages: currentApiMessages,
+            messages: withCacheBreakpoint(currentApiMessages),
             tools: TOOL_DEFINITIONS,
             temperature: 0.2,
           }),
@@ -214,11 +249,11 @@ Be concise. Confirm only after tool calls succeed.`
 
       // Success path: commit both display and API history.
       setMessages((prev) => [...prev, { role: 'assistant', content: assistantText }])
-      setApiMessages((prev) => [
-        ...prev,
-        { role: 'user', content: text.trim() },
-        { role: 'assistant', content: assistantText },
-      ].slice(-MAX_HISTORY_MESSAGES))
+      // Store the full turn, tool calls and results included.
+      setApiMessages(trimToTurns([
+        ...currentApiMessages,
+        { role: 'assistant', content: assistantText || '(no reply)' },
+      ], MAX_HISTORY_TURNS))
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.')
       // Do NOT touch apiMessages — the previous turn's state is still valid.

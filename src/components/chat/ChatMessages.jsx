@@ -79,7 +79,7 @@ export default function ChatMessages({ messages, isLoading, isWorking, error }) 
           className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
         >
           <div
-            className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm break-words ${
+            className={`max-w-[85%] min-w-0 rounded-2xl px-4 py-2.5 text-sm break-words ${
               msg.role === 'user'
                 ? 'bg-primary text-primary-foreground rounded-br-sm whitespace-pre-wrap'
                 : 'bg-muted text-foreground rounded-bl-sm prose prose-sm prose-neutral dark:prose-invert max-w-none'
